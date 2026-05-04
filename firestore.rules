@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny for safety
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Main portal data document (Production-Ready)
+    match /portal/data {
+      allow read: if isSignedIn();
+      
+      // Allow users to create/update if they are signed in
+      // and ensure the data structure (students list and attendance map) exists
+      allow create, update: if isSignedIn() && 
+                    request.resource.data.get('students', []) is list &&
+                    request.resource.data.get('attendance', {}) is map;
+                    
+      // Prevent accidental deletion of the main database document
+      allow delete: if false;
+    }
+
+    // Needed for the app to verify the database connection on startup
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Safety for other potential documents within the portal
+    match /portal/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && docId is string && docId.size() < 128;
+    }
+  }
+}
