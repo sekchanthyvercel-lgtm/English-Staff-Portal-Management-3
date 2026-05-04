@@ -194,7 +194,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: Tab.PenaltyHall, icon: Zap, label: 'Late/absence Hall Study', roles: ['Admin', 'Teacher', 'Finance'] },
     { id: Tab.DailyTask, icon: ClipboardList, label: 'Daily Task', roles: ['Admin', 'Teacher', 'Finance'] },
     { id: Tab.Reminder, icon: Bell, label: 'Reminder', roles: ['Admin', 'Teacher', 'Finance'] },
-    { id: Tab.DPSS, icon: FileText, label: 'DPSS', roles: ['Admin', 'Teacher', 'Finance'] },
     { id: Tab.RecycleBin, icon: Trash2, label: 'Recycle Bin', roles: ['Admin', 'Teacher'] },
   ];
 

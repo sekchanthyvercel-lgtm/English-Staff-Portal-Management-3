@@ -12,7 +12,6 @@ import { Sidebar } from './components/Sidebar';
 import { ContactManager } from './components/ContactManager';
 import { SupermanAnimation } from './components/SupermanAnimation';
 import ReminderTable from './components/ReminderTable';
-import DPSSTable from './components/DPSSTable';
 import { RecycleBin } from './components/RecycleBin';
 import { Dashboard } from './components/Dashboard';
 import { AppData, Student, CurrentUser, UserRole, ColumnConfig, Tab, ViewMode, AppSettings, StudentCategory } from './types';
@@ -635,13 +634,6 @@ const App: React.FC = () => {
                 settings={data.settings}
                 onUpdateSettings={(s) => handleUpdate({ ...data, settings: s })}
               />
-            )}
-            {activeTab === Tab.DPSS && (
-                <div className="flex-1 flex overflow-hidden bg-white/20">
-                  <div className="w-full h-full">
-                    <DPSSTable data={data} onUpdate={handleUpdate} />
-                  </div>
-                </div>
             )}
             {activeTab === Tab.Attendance && (
               <AttendanceTable 

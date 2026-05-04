@@ -95,20 +95,11 @@ export interface ContentBlock {
   data: any;
 }
 
-export interface DPSSTopic {
-  id: string;
-  title: string;
-  content: string;
-  alignment: 'left' | 'center' | 'right';
-  children?: DPSSTopic[];
-}
-
 export interface AppData {
   students: Student[];
   settings?: AppSettings;
   attendance: Record<string, Record<string, number>>;
   dailyTasks?: Record<string, Record<string, string>>;
-  dpssTopics?: DPSSTopic[];
   systemLocked?: boolean;
   moduleLocks?: ModuleLocks;
   idCounters?: Record<string, number>;
@@ -130,7 +121,6 @@ export enum Tab {
   PenaltyHall = 'PenaltyHall',
   DailyTask = 'DailyTask',
   Reminder = 'Reminder',
-  DPSS = 'DPSS',
   Attendance = 'Attendance',
   Finance = 'Finance',
   StudentCard = 'StudentCard',
