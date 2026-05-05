@@ -123,7 +123,9 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
         (s.name || '').toLowerCase().includes(query) || 
         (s.displayId || '').toLowerCase().includes(query) ||
         (s.assistant || '').toLowerCase().includes(query) ||
-        (s.teachers || '').toLowerCase().includes(query);
+        (s.teachers || '').toLowerCase().includes(query) ||
+        (s.time || '').toLowerCase().includes(query) ||
+        (s.level || '').toLowerCase().includes(query);
 
       const matchesTeacher = !filters.teacher || 
           (s.teachers || '').toUpperCase().includes(filters.teacher.toUpperCase());

@@ -199,6 +199,7 @@ export const AttendanceTable: React.FC<Props> = ({
         s.name.toLowerCase().includes(query) ||
         (s.assistant && s.assistant.toLowerCase().includes(query)) ||
         (s.time && s.time.toLowerCase().includes(query)) ||
+        (s.level && s.level.toLowerCase().includes(query)) ||
         (s.teachers && s.teachers.toLowerCase().includes(query));
 
       return (s.category === 'Class' || s.category === 'Hall' || !s.category) && 

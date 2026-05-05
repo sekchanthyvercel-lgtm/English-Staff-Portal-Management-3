@@ -615,6 +615,8 @@ const App: React.FC = () => {
                 setFilters={setFilters}
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
+                uniqueLevels={uniqueLevels}
+                uniqueTimes={uniqueTimes}
                 onAddStudent={(defaults) => handleAddStudent(defaults)} 
                 role={currentUser.role}
                 onClearCategory={handleClearCategory}

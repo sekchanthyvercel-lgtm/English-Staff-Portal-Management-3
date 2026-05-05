@@ -79,6 +79,8 @@ interface DailyTaskTableProps {
   setFilters?: (f: FilterState) => void;
   uniqueTeachers?: string[];
   uniqueAssistants?: string[];
+  uniqueLevels?: string[];
+  uniqueTimes?: string[];
   onUpdate: (data: AppData) => void;
   onAddStudent: (defaults: Partial<Student>) => void;
   onDeleteStudent?: (ids: string | string[], skipConfirm?: boolean) => void;
@@ -94,6 +96,8 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
   setFilters,
   uniqueTeachers = [],
   uniqueAssistants = [],
+  uniqueLevels = [],
+  uniqueTimes = [],
   onUpdate,
   onAddStudent,
   onDeleteStudent,
@@ -159,7 +163,6 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
-      if (s.category !== 'DailyTask' && !(s.shift && !s.category)) return false;
       const query = (filters.searchQuery || '').toLowerCase();
       const matchesSearch = !query || 
                            (s.name || '').toLowerCase().includes(query) || 
@@ -169,15 +172,15 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                            (s.assistant || '').toLowerCase().includes(query) ||
                            (s.time || '').toLowerCase().includes(query);
       if (!matchesSearch) return false;
-      if (filters.level && !s.level?.toUpperCase().includes(filters.level.toUpperCase())) return false;
-      if (filters.time && !s.time?.toUpperCase().includes(filters.time.toUpperCase()) && !s.shift?.toUpperCase().includes(filters.time.toUpperCase())) return false;
-      if (filters.teacher && !s.teachers?.toUpperCase().includes(filters.teacher.toUpperCase())) return false;
-      if (filters.assistant && !s.assistant?.toUpperCase().includes(filters.assistant.toUpperCase())) return false;
       
-      const matchesHidden = filters.showHidden || !s.isHidden;
-      if (!matchesHidden) return false;
+      const teacherMatch = !filters.teacher || (s.teachers && s.teachers.toUpperCase().includes(filters.teacher.toUpperCase()));
+      const assistantMatch = !filters.assistant || (s.assistant && s.assistant.toUpperCase().includes(filters.assistant.toUpperCase()));
+      const levelMatch = !filters.level || (s.level && s.level.toUpperCase().includes(filters.level.toUpperCase()));
+      const timeMatch = !filters.time || (s.time && s.time.toUpperCase().includes(filters.time.toUpperCase())) || (s.shift && s.shift.toUpperCase().includes(filters.time.toUpperCase()));
       
-      return true;
+      return (s.category === 'DailyTask' || (s.shift && !s.category)) && 
+             teacherMatch && assistantMatch && levelMatch && timeMatch &&
+             (filters.showHidden || !s.isHidden);
     }).sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [students, filters]);
 
@@ -381,8 +384,70 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <button className="p-2.5 bg-white/40 rounded-xl hover:bg-white/60 transition-all border border-white/10 text-slate-600">
-                             <div className="w-5 h-5 flex items-center justify-center"><Search size={18} /></div>
+                        <div className="relative group min-w-[200px]">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                            <input 
+                                type="text"
+                                placeholder="Search tasks..."
+                                value={filters.searchQuery || ''}
+                                onChange={e => setFilters?.({ ...filters, searchQuery: e.target.value })}
+                                className="w-full h-11 pl-10 pr-4 bg-white/40 backdrop-blur-md border border-white/20 rounded-xl text-[11px] font-black uppercase text-slate-800 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/50 shadow-md placeholder:text-slate-400"
+                            />
+                        </div>
+                        
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pointer-events-auto shrink-0 relative">
+                            <div className="relative group">
+                                <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                                <select 
+                                    value={filters.teacher || ''} 
+                                    onChange={e => setFilters?.({ ...filters, teacher: e.target.value })} 
+                                    className={filterSelectStyle}
+                                >
+                                    <option value="">Teachers</option>
+                                    {uniqueTeachers.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                            <div className="relative group">
+                                <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                                <select 
+                                    value={filters.assistant || ''} 
+                                    onChange={e => setFilters?.({ ...filters, assistant: e.target.value })} 
+                                    className={filterSelectStyle}
+                                >
+                                    <option value="">Assistants</option>
+                                    {uniqueAssistants.map(a => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                            </div>
+                            <div className="relative group">
+                                <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                                <select 
+                                    value={filters.level || ''} 
+                                    onChange={e => setFilters?.({ ...filters, level: e.target.value })} 
+                                    className={filterSelectStyle}
+                                >
+                                    <option value="">Levels</option>
+                                    {uniqueLevels.map(l => <option key={l} value={l}>{l}</option>)}
+                                </select>
+                            </div>
+                            <div className="relative group">
+                                <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                                <select 
+                                    value={filters.time || ''} 
+                                    onChange={e => setFilters?.({ ...filters, time: e.target.value })} 
+                                    className={filterSelectStyle}
+                                >
+                                    <option value="">Times</option>
+                                    {uniqueTimes.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={() => setFilters?.({ searchQuery: '', teacher: '', assistant: '', time: '', level: '', behavior: '', deadline: '', showHidden: filters.showHidden })}
+                            className="p-2.5 bg-white/40 rounded-xl hover:bg-white/60 transition-all border border-white/10 text-slate-600"
+                            title="Reset Filters"
+                        >
+                             <FilterX size={18} />
                         </button>
                         <button 
                             onClick={() => onClearCategory?.(['DailyTask'])}

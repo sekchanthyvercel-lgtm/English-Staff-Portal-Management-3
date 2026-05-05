@@ -164,7 +164,9 @@ export const StudentTable: React.FC<StudentTableProps> = ({
             columns.some(col => String(s[col.key] || '').toLowerCase().includes(query)) ||
             String(s.name || '').toLowerCase().includes(query) ||
             String(s.assistant || '').toLowerCase().includes(query) ||
-            String(s.teachers || '').toLowerCase().includes(query);
+            String(s.teachers || '').toLowerCase().includes(query) ||
+            String(s.level || '').toLowerCase().includes(query) ||
+            String(s.time || '').toLowerCase().includes(query);
         
         // Exact Teacher filtering
         const matchesTeacher = !filters.teacher || 
