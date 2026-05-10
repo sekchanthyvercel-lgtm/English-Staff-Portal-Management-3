@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { Student, FilterState, UserRole, AppSettings, StudentCategory } from '../types';
 import { 
     LayoutGrid, Search, Trash2, Zap, Plus, AlertCircle, Eye, EyeOff, CheckSquare, Square,
-    Lock, Unlock, FileSpreadsheet, FileText
+    Lock, Unlock, FileSpreadsheet, FileText, ArrowUpDown
 } from 'lucide-react';
 import { exportToExcel, exportToWord } from '../services/excelService';
 
@@ -15,6 +15,11 @@ const MultilineInput: React.FC<{
   placeholder?: string;
 }> = ({ value, onChange, className, style, placeholder }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -22,17 +27,25 @@ const MultilineInput: React.FC<{
       const scrollHeight = textareaRef.current.scrollHeight;
       textareaRef.current.style.height = scrollHeight + 'px';
     }
-  }, [value]);
+  }, [localValue]);
+
+  const handleBlur = () => {
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+  };
 
   return (
     <textarea
       ref={textareaRef}
-      value={value}
+      value={localValue}
       placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
+          handleBlur();
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
@@ -191,6 +204,21 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isFrozen, setIsFrozen] = useState(true);
+  const [localSearch, setLocalSearch] = useState(filters.searchQuery || '');
+
+  useEffect(() => {
+    setLocalSearch(filters.searchQuery || '');
+  }, [filters.searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== filters.searchQuery) {
+        setFilters?.({ ...filters, searchQuery: localSearch });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
   const [studentNameWidth, setStudentNameWidth] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dps_studentNameWidth');
@@ -274,8 +302,19 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
     return Array.from(lv).filter(Boolean).sort();
   }, [penaltyStudents]);
 
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (key: string) => {
+    setSortConfig(current => {
+      if (current?.key === key) {
+        return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
   const filteredStudents = useMemo(() => {
-    return penaltyStudents.filter(s => {
+    let result = penaltyStudents.filter(s => {
         const query = filters.searchQuery?.toLowerCase() || '';
         const matchesSearch = !query || 
             String(s.name || '').toLowerCase().includes(query) ||
@@ -294,8 +333,22 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
         const matchesVisibility = filters.showHidden || !s.isHidden;
         
         return matchesSearch && matchesTeacher && matchesAssistant && matchesLevel && matchesBehavior && matchesVisibility;
-    }).sort((a, b) => (a.order || 0) - (b.order || 0));
-  }, [penaltyStudents, filters]);
+    });
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const valA = String(a[sortConfig.key as keyof Student] || '').toLowerCase();
+        const valB = String(b[sortConfig.key as keyof Student] || '').toLowerCase();
+        if (sortConfig.direction === 'asc') return valA.localeCompare(valB);
+        return valB.localeCompare(valA);
+      });
+    } else {
+      result.sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return result;
+  }, [penaltyStudents, filters, sortConfig]);
+
+  const deferredStudents = React.useDeferredValue(filteredStudents);
 
   const isoToDisplay = (iso: string) => {
       if (!iso) return '';
@@ -491,8 +544,8 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                       type="text" 
                       placeholder="Search spreadsheet..." 
                       className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all"
-                      value={filters.searchQuery}
-                      onChange={e => setFilters?.({...filters, searchQuery: e.target.value})}
+                      value={localSearch}
+                      onChange={e => setLocalSearch(e.target.value)}
                   />
               </div>
 
@@ -538,12 +591,17 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
               <table className="w-full border-collapse table-fixed min-w-[1400px]">
                   <thead className="sticky top-0 z-40 bg-white/[0.02] backdrop-blur-[2px] border-b border-white/5">
                       <tr>
-                        <th className={`border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 z-50 ${isFrozen ? 'bg-white shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
-                          <div className="flex items-center justify-between">
-                            Student Name
-                          </div>
-                          <div onMouseDown={onResizeStart} onTouchStart={onResizeStart} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-400 opacity-0 group-hover:opacity-100 transition-opacity z-50" />
-                        </th>
+                      <th 
+                        onClick={() => handleSort('name')}
+                        className={`border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 z-50 cursor-pointer hover:bg-slate-50 transition-colors group ${isFrozen ? 'bg-white/95 shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white/80'}`} 
+                        style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}
+                      >
+                        <div className="flex items-center justify-between">
+                          STUDENT NAME
+                          <ArrowUpDown size={10} className={`${sortConfig?.key === 'name' ? 'opacity-100 text-orange-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
+                        </div>
+                        <div onMouseDown={onResizeStart} onTouchStart={onResizeStart} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-400 opacity-0 group-hover:opacity-100 transition-opacity z-50" />
+                      </th>
                         <th className={`w-10 border-r border-white/5 text-[10px] font-black text-slate-900 sticky top-0 z-40 bg-white`} style={{ width: CHECKBOX_WIDTH }}>
                           <div className="flex items-center justify-center">
                             <button onClick={() => setSelectedIds(selectedIds.size === filteredStudents.length ? new Set() : new Set(filteredStudents.map(s => s.id)))}>
@@ -556,9 +614,24 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                         <th className="w-24 border-r border-white/5 text-[10px] font-black text-slate-900 text-center px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px]">Behavior 1</th>
                         <th className="w-24 border-r border-white/5 text-[10px] font-black text-slate-900 text-center px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px]">Behavior 2</th>
                         <th className="w-24 border-r border-white/5 text-[10px] font-black text-slate-900 text-center px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px]">Behavior 3</th>
-                        <th className="w-40 border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px]">Teachers</th>
-                        <th className="w-36 border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px]">Assistant</th>
-                        <th className="w-24 border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px]">Level</th>
+                        <th onClick={() => handleSort('teachers')} className="w-40 border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px] cursor-pointer hover:bg-white/10 group transition-colors">
+                          <div className="flex items-center justify-between">
+                            TEACHERS
+                            <ArrowUpDown size={10} className={`${sortConfig?.key === 'teachers' ? 'opacity-100 text-orange-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
+                          </div>
+                        </th>
+                        <th onClick={() => handleSort('assistant')} className="w-36 border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px] cursor-pointer hover:bg-white/10 group transition-colors">
+                          <div className="flex items-center justify-between">
+                            ASSISTANT
+                            <ArrowUpDown size={10} className={`${sortConfig?.key === 'assistant' ? 'opacity-100 text-orange-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
+                          </div>
+                        </th>
+                        <th onClick={() => handleSort('level')} className="w-24 border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 bg-white/[0.03] backdrop-blur-[2px] cursor-pointer hover:bg-white/10 group transition-colors">
+                          <div className="flex items-center justify-between">
+                            LEVEL
+                            <ArrowUpDown size={10} className={`${sortConfig?.key === 'level' ? 'opacity-100 text-orange-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
+                          </div>
+                        </th>
                         
                         {[1, 2, 3, 4, 5, 6, 7].map(num => (
                           <React.Fragment key={num}>
@@ -573,7 +646,7 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredStudents.map((s, idx) => (
+                    {deferredStudents.map((s, idx) => (
                       <PenaltyRow
                         key={s.id}
                         s={s}

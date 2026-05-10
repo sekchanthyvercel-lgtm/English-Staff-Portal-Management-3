@@ -206,7 +206,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {!isOpen && (
         <button 
           onClick={() => setIsOpen(true)}
-          className="fixed top-4 left-4 z-[60] w-12 h-12 bg-white text-[#1B254B] rounded-xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all border border-slate-100"
+          className="fixed top-6 left-6 z-[60] w-12 h-12 bg-white text-[#1B254B] rounded-xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all border border-slate-100"
         >
           <Menu size={24} />
         </button>

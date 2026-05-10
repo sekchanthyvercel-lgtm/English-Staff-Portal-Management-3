@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { normalizeBehavior } from '../src/lib/behaviorUtils';
 import { Student, AppData, StudyType } from '../types';
-import { Search, ChevronLeft, ChevronRight, AlertCircle, Trash2, Lock, CheckSquare, Square, Trash } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, AlertCircle, Trash2, Lock, CheckSquare, Square, Trash, ArrowUpDown } from 'lucide-react';
 import { format } from 'date-fns';
 
 const MultilineInput: React.FC<{
@@ -13,6 +13,11 @@ const MultilineInput: React.FC<{
   readOnly?: boolean;
 }> = ({ value, onChange, className, style, placeholder, readOnly }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -20,18 +25,26 @@ const MultilineInput: React.FC<{
       const scrollHeight = textareaRef.current.scrollHeight;
       textareaRef.current.style.height = Math.max(36, scrollHeight) + 'px';
     }
-  }, [value]);
+  }, [localValue]);
+
+  const handleBlur = () => {
+    if (!readOnly && localValue !== value) {
+      onChange(localValue);
+    }
+  };
 
   return (
     <textarea
       ref={textareaRef}
-      value={value}
+      value={localValue}
       readOnly={readOnly}
       placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
+          handleBlur();
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
@@ -102,6 +115,21 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
   const [isFrozen, setIsFrozen] = useState(true);
   const [focusedCell, setFocusedCell] = useState<{ id: string; field: string } | null>(null);
   
+  const [localSearch, setLocalSearch] = useState(filters.searchQuery || '');
+
+  useEffect(() => {
+    setLocalSearch(filters.searchQuery || '');
+  }, [filters.searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== filters.searchQuery) {
+        setFilters?.({ ...filters, searchQuery: localSearch });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
   const [widths, setWidths] = useState<Record<string, number>>(() => {
     const saved = localStorage.getItem('dps_finance_widths');
     return saved ? JSON.parse(saved) : DEFAULT_WIDTHS;
@@ -148,24 +176,35 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
       return !isNaN(startDay) && todayDay >= startDay;
   };
 
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (key: string) => {
+    setSortConfig(current => {
+      if (current?.key === key) {
+        return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
   const filteredStudents = useMemo(() => {
-    return students.filter(s => {
+    let result = students.filter(s => {
       const query = (filters.searchQuery || '').toLowerCase();
       const matchesSearch = !query || 
-        (s.name || '').toLowerCase().includes(query) || 
-        (s.displayId || '').toLowerCase().includes(query) ||
-        (s.assistant || '').toLowerCase().includes(query) ||
-        (s.teachers || '').toLowerCase().includes(query) ||
-        (s.time2 || '').toLowerCase().includes(query) ||
-        (s.behavior || '').toLowerCase().includes(query) ||
-        (s.time || '').toLowerCase().includes(query) ||
-        (s.level || '').toLowerCase().includes(query);
+        String(s.name || '').toLowerCase().includes(query) || 
+        String(s.displayId || '').toLowerCase().includes(query) ||
+        String(s.assistant || '').toLowerCase().includes(query) ||
+        String(s.teachers || '').toLowerCase().includes(query) ||
+        String(s.time2 || '').toLowerCase().includes(query) ||
+        String(s.behavior || '').toLowerCase().includes(query) ||
+        String(s.time || '').toLowerCase().includes(query) ||
+        String(s.level || '').toLowerCase().includes(query);
 
       const matchesTeacher = !filters.teacher || 
-          (s.teachers || '').toUpperCase().includes(filters.teacher.toUpperCase());
+          String(s.teachers || '').toUpperCase().includes(filters.teacher.toUpperCase());
           
       const matchesAssistant = !filters.assistant || 
-          (s.assistant || '').toUpperCase().includes(filters.assistant.toUpperCase());
+          String(s.assistant || '').toUpperCase().includes(filters.assistant.toUpperCase());
 
       const behaviorMatch = !filters.behavior || 
         normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
@@ -179,8 +218,21 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
         behaviorMatch &&
         (showOnlyDue ? isStudentDue(s) : true) &&
         (filters.showHidden || !s.isHidden);
-    }).sort((a, b) => a.order - b.order);
-  }, [students, activeTab, selectedClass, filters, showOnlyDue, year]);
+    });
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const valA = String((a as any)[sortConfig.key] || '').toLowerCase();
+        const valB = String((b as any)[sortConfig.key] || '').toLowerCase();
+        return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      });
+    } else {
+      result.sort((a, b) => a.order - b.order);
+    }
+    return result;
+  }, [students, activeTab, selectedClass, filters, showOnlyDue, year, sortConfig]);
+
+  const deferredStudents = React.useDeferredValue(filteredStudents);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -234,8 +286,15 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
   };
 
   const Th = ({ label, colId, width, stickyLeft, align = 'left', className = '' }: { label: string, colId: string, width: number, stickyLeft?: number, align?: string, className?: string }) => (
-    <th className={`p-3 bg-white/5 border-r border-white/5 text-[10px] font-black uppercase text-slate-900 relative group backdrop-blur-md ${stickyLeft !== undefined ? 'sticky z-50' : ''} ${className}`} style={{ width, left: stickyLeft }}>
-      <div className={`flex items-center ${align === 'center' ? 'justify-center' : 'justify-start'}`}>{label}</div>
+    <th 
+      onClick={() => handleSort(colId)}
+      className={`p-3 bg-white/5 border-r border-white/5 text-[10px] font-black uppercase text-slate-900 relative group backdrop-blur-md cursor-pointer hover:bg-slate-50 transition-colors ${stickyLeft !== undefined ? 'sticky z-50' : ''} ${className}`} 
+      style={{ width, left: stickyLeft }}
+    >
+      <div className={`flex items-center justify-between`}>
+        {label}
+        <ArrowUpDown size={10} className={`${sortConfig?.key === colId ? 'opacity-100 text-orange-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
+      </div>
       <div onMouseDown={e => onResizeStart(colId, e)} className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity z-10" />
     </th>
   );
@@ -277,8 +336,8 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16} />
              <input 
                 placeholder="Find student..." 
-                value={filters.searchQuery || ''} 
-                onChange={e => setFilters({ ...filters, searchQuery: e.target.value })} 
+                value={localSearch} 
+                onChange={e => setLocalSearch(e.target.value)} 
                 className="w-full pl-9 pr-3 py-2 bg-white/[0.03] border border-white/10 rounded-xl text-sm outline-none font-black text-slate-900 placeholder:text-slate-500" 
              />
           </div>
@@ -316,7 +375,7 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
                 colId="name" 
                 width={widths['name'] || DEFAULT_WIDTHS.name} 
                 stickyLeft={isFrozen ? 0 : undefined} 
-                className={isFrozen ? 'bg-white shadow-[4px_0_10px_rgba(0,0,0,0.1)]' : ''}
+                className={isFrozen ? 'bg-white/95 shadow-[4px_0_10px_rgba(0,0,0,0.1)]' : ''}
               />
               <Th label="#" colId="no" width={widths['no'] || DEFAULT_WIDTHS.no} align="center" />
               <Th label="ID NUMBER" colId="id" width={widths['id'] || DEFAULT_WIDTHS.id} />
@@ -330,7 +389,7 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-             {filteredStudents.map((s, i) => (
+             {deferredStudents.map((s, i) => (
                 <FinanceRow
                   key={s.id}
                   s={s}

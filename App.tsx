@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StudentTable } from './components/StudentTable';
 import { PenaltyTable } from './components/PenaltyTable';
 import { DailyTaskTable } from './components/DailyTaskTable';
@@ -67,6 +67,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('Default');
   const [globalScale, setGlobalScale] = useState(1);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const [filters, setFilters] = useState<any>({
     searchQuery: '', 
@@ -81,6 +82,15 @@ const App: React.FC = () => {
     attendanceTab: 'PartTime',
     attendanceClass: ''
   });
+
+  const [debouncedFilters, setDebouncedFilters] = React.useState(filters);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filters]);
 
   const OFFICIAL_DAILY_TASKS = useMemo(() => [
     { name: "Souyean & Sreythea", level: "1A + (5.1)", shift: "Morning", category: "DailyTask" as StudentCategory },
@@ -180,19 +190,17 @@ const App: React.FC = () => {
 
   const uniqueTeachers = useMemo(() => {
     const ts = new Set<string>();
-    // From all active students
     allActiveStudents.forEach(s => {
       if (s.teachers) {
         String(s.teachers).split(/[&+,\/]+/).forEach(t => ts.add(t.trim()));
       }
-      if (s.teacher) ts.add(String(s.teacher).trim()); // Some legacy keys might use .teacher
+      if (s.teacher) ts.add(String(s.teacher).trim());
     });
-    // From staff directory
     if (data.staffDirectory) {
       Object.keys(data.staffDirectory).forEach(name => ts.add(name.trim()));
     }
     return Array.from(ts).filter(Boolean).sort();
-  }, [allActiveStudents, data.staffDirectory]);
+  }, [data.students, data.staffDirectory]);
 
   const uniqueAssistants = useMemo(() => {
     const asst = new Set<string>();
@@ -205,7 +213,7 @@ const App: React.FC = () => {
       Object.keys(data.staffDirectory).forEach(name => asst.add(name.trim()));
     }
     return Array.from(asst).filter(Boolean).sort();
-  }, [allActiveStudents, data.staffDirectory]);
+  }, [data.students, data.staffDirectory]);
 
   const uniqueTimes = useMemo(() => {
     const tm = new Set<string>();
@@ -214,7 +222,7 @@ const App: React.FC = () => {
       if (s.time2) String(s.time2).split('&').forEach(t => tm.add(t.trim()));
     });
     return Array.from(tm).filter(Boolean).sort();
-  }, [allActiveStudents]);
+  }, [data.students]);
 
   const uniqueLevels = useMemo(() => {
     const lv = new Set<string>();
@@ -222,7 +230,7 @@ const App: React.FC = () => {
       if (s.level) String(s.level).split('&').forEach(l => lv.add(l.trim()));
     });
     return Array.from(lv).filter(Boolean).sort();
-  }, [allActiveStudents]);
+  }, [data.students]);
 
   const uniqueBehaviors = useMemo(() => {
     const bh = new Set<string>();
@@ -233,7 +241,7 @@ const App: React.FC = () => {
       }
     });
     return Array.from(bh).sort();
-  }, [allActiveStudents]);
+  }, [data.students]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -328,26 +336,34 @@ const App: React.FC = () => {
         setHistory(h => [...h.slice(-19), prev]);
         setRedoStack([]);
       }
-      saveData(next).catch(err => {
-        console.error("Failed to sync with cloud:", err);
-        let errorBody = err.message;
-        try {
-          const parsed = JSON.parse(err.message);
-          errorBody = parsed.error || err.message;
-        } catch (e) {
-          // Not JSON
-        }
+      
+      // Debounce Cloud Sync
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+          saveData(next).catch(err => {
+            console.error("Failed to sync with cloud:", err);
+            let errorBody = err.message;
+            try {
+              const parsed = JSON.parse(err.message);
+              errorBody = parsed.error || err.message;
+            } catch (e) {
+              // Not JSON
+            }
+    
+            if (errorBody.toLowerCase().includes('too large') || errorBody.toLowerCase().includes('1mb')) {
+              alert("Cloud sync failed: The payload chunk was too large or internet issues occurred.");
+            } else if (errorBody.toLowerCase().includes('permission')) {
+              alert(`Cloud sync failed: Permission denied. This usually means Anonymous Auth is not enabled. Details: ${errorBody}`);
+            } else if (errorBody.toLowerCase().includes('quota')) {
+              alert("Cloud sync failed: Firestore Quota Exceeded. You have hit the free daily usage limits in Firebase. The quota resets tomorrow.");
+            } else {
+              if (!errorBody.includes('offline')) {
+                alert(`Cloud sync failed: ${errorBody}. Your changes might not be saved.`);
+              }
+            }
+          });
+      }, 2000); // Wait 2 seconds of inactivity before syncing
 
-        if (errorBody.toLowerCase().includes('too large') || errorBody.toLowerCase().includes('1mb')) {
-          alert("Cloud sync failed: The payload chunk was too large or internet issues occurred.");
-        } else if (errorBody.toLowerCase().includes('permission')) {
-          alert(`Cloud sync failed: Permission denied. This usually means Anonymous Auth is not enabled in Firebase Console. Details: ${errorBody}`);
-        } else if (errorBody.toLowerCase().includes('quota')) {
-          alert("Cloud sync failed: Firestore Quota Exceeded. You have hit the free daily usage limits in Firebase. The quota resets tomorrow.");
-        } else {
-          alert(`Cloud sync failed: ${errorBody}. Your changes might not be saved. Check if Firebase is enabled.`);
-        }
-      });
       return next;
     });
   };
@@ -558,7 +574,7 @@ const App: React.FC = () => {
       <SupermanAnimation students={data.students} />
 
       <main 
-        className="flex-1 flex flex-col overflow-hidden transition-transform duration-300 origin-top-left bg-transparent"
+        className="flex-1 flex flex-col overflow-hidden transition-transform duration-300 origin-top-left bg-transparent pt-4 sm:pt-0"
         style={{ transform: `scale(${globalScale})`, width: `${100/globalScale}%`, height: `${100/globalScale}%` }}
       >
         {loading ? (
@@ -575,8 +591,9 @@ const App: React.FC = () => {
                 onUpdate={students => handleUpdate({...data, students: [...students, ...data.students.filter(s => s.deletedAt)]})} 
                 onUpdateColumns={cols => handleUpdate({...data, settings: { ...data.settings!, columns: cols }})}
                 onDeleteStudent={handleDeleteStudent}
-                filters={filters} 
+                filters={debouncedFilters} 
                 setFilters={setFilters}
+                actualSearchQuery={filters.searchQuery}
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
                 uniqueTimes={uniqueTimes}
@@ -614,8 +631,9 @@ const App: React.FC = () => {
                 students={allActiveStudents} 
                 onUpdate={students => handleUpdate({...data, students: [...students, ...data.students.filter(s => s.deletedAt)]})} 
                 onDeleteStudent={handleDeleteStudent}
-                filters={filters} 
+                filters={debouncedFilters} 
                 setFilters={setFilters}
+                actualSearchQuery={filters.searchQuery}
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
                 uniqueLevels={uniqueLevels}
@@ -635,8 +653,9 @@ const App: React.FC = () => {
                 data={data}
                 onUpdate={handleUpdate} 
                 onDeleteStudent={handleDeleteStudent}
-                filters={filters} 
+                filters={debouncedFilters} 
                 setFilters={setFilters}
+                actualSearchQuery={filters.searchQuery}
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
                 uniqueLevels={uniqueLevels}
@@ -667,8 +686,9 @@ const App: React.FC = () => {
                 students={allActiveStudents} 
                 data={data} 
                 onDeleteStudent={handleDeleteStudent}
-                filters={filters} 
+                filters={debouncedFilters} 
                 setFilters={setFilters}
+                actualSearchQuery={filters.searchQuery}
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
                 uniqueLevels={uniqueLevels}
@@ -691,8 +711,9 @@ const App: React.FC = () => {
                 onQuickAdd={() => setIsAiOpen(true)}
                 onAddStudent={handleAddStudent}
                 isLocked={isModuleLocked('Finance')}
-                filters={filters}
+                filters={debouncedFilters}
                 setFilters={setFilters}
+                actualSearchQuery={filters.searchQuery}
               />
             )}
             {activeTab === Tab.StudentCard && (

@@ -230,6 +230,21 @@ export const StudentTable: React.FC<StudentTableProps> = ({
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isFrozen, setIsFrozen] = useState(true); 
+  const [localSearch, setLocalSearch] = useState(filters.searchQuery || '');
+
+  useEffect(() => {
+    setLocalSearch(filters.searchQuery || '');
+  }, [filters.searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== filters.searchQuery) {
+        setFilters?.({ ...filters, searchQuery: localSearch });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
   const [studentNameWidth, setStudentNameWidth] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dps_studentNameWidth');
@@ -274,7 +289,9 @@ export const StudentTable: React.FC<StudentTableProps> = ({
         const matchesAssistant = !filters.assistant || 
             String(s.assistant || '').toUpperCase().includes(filters.assistant.toUpperCase());
             
-        const matchesTime = !filters.time || String(s.time || '').toUpperCase().includes(filters.time.toUpperCase());
+        const matchesTime = !filters.time || 
+            String(s.time || '').toUpperCase().includes(filters.time.toUpperCase()) ||
+            String(s.time2 || '').toUpperCase().includes(filters.time.toUpperCase());
         const matchesLevel = !filters.level || String(s.level || '').toUpperCase().includes(filters.level.toUpperCase());
         const matchesBehavior = !filters.behavior || 
             normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
@@ -450,8 +467,8 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                       type="text" 
                       placeholder="Search spreadsheet..." 
                       className="w-full h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-primary-500/10 focus:border-primary-500 transition-all"
-                      value={filters.searchQuery}
-                      onChange={e => setFilters?.({...filters, searchQuery: e.target.value})}
+                      value={localSearch}
+                      onChange={e => setLocalSearch(e.target.value)}
                   />
               </div>
 
@@ -572,9 +589,14 @@ export const StudentTable: React.FC<StudentTableProps> = ({
               <table className="border-collapse table-fixed bg-transparent" style={{ width: totalWidth, minWidth: '100%' }}>
                   <thead>
                     <tr className="bg-white/[0.01] border-b border-white/5 h-10 backdrop-blur-[1px]">
-                        <th className={`px-3 border-r border-white/5 sticky top-0 z-[60] text-slate-900 font-black text-[11px] uppercase tracking-tighter cursor-pointer ${isFrozen ? 'bg-white shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white/[0.01]'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
+                        <th 
+                          onClick={() => handleSort('name')}
+                          className={`px-3 border-r border-white/5 sticky top-0 z-[60] text-slate-900 font-black text-[11px] uppercase tracking-tighter cursor-pointer group transition-colors hover:bg-slate-50 ${isFrozen ? 'bg-white/95 shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white/80'}`} 
+                          style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}
+                        >
                           <div className="flex items-center justify-between">
                             STUDENT NAME
+                            <ArrowUpDown size={10} className={`${sortConfig?.key === 'name' ? 'opacity-100 text-primary-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
                           </div>
                           <div onMouseDown={e => { e.stopPropagation(); onResizeStart('studentName', e); }} onTouchStart={e => { e.stopPropagation(); onResizeStart('studentName', e); }} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-400 opacity-0 group-hover:opacity-100 transition-opacity z-50" />
                         </th>

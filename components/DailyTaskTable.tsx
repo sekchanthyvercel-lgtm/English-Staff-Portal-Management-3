@@ -22,6 +22,7 @@ import {
   Lock,
   Unlock,
   Clock,
+  ArrowUpDown,
   FileSpreadsheet,
   FileText
 } from 'lucide-react';
@@ -46,24 +47,37 @@ const MultilineInput: React.FC<{
   placeholder?: string;
 }> = ({ value, onChange, className, style, placeholder }) => {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const [localValue, setLocalValue] = useState(value);
 
-  React.useEffect(() => {
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = '0px';
       const scrollHeight = textareaRef.current.scrollHeight;
       textareaRef.current.style.height = scrollHeight + 'px';
     }
-  }, [value]);
+  }, [localValue]);
+
+  const handleBlur = () => {
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+  };
 
   return (
     <textarea
       ref={textareaRef}
-      value={value}
+      value={localValue}
       placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
+          handleBlur();
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
@@ -253,6 +267,21 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isFrozen, setIsFrozen] = useState(true);
+  const [localSearch, setLocalSearch] = useState(filters.searchQuery || '');
+
+  useEffect(() => {
+    setLocalSearch(filters.searchQuery || '');
+  }, [filters.searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== filters.searchQuery) {
+        setFilters?.({ ...filters, searchQuery: localSearch });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
   const [studentNameWidth, setStudentNameWidth] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dps_studentNameWidth');
@@ -307,8 +336,19 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
   const weekEnd = addDays(weekStart, 4); // Friday
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  const handleSort = (key: string) => {
+    setSortConfig(current => {
+      if (current?.key === key) {
+        return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: 'asc' };
+    });
+  };
+
   const filteredStudents = useMemo(() => {
-    return students.filter(s => {
+    let result = students.filter(s => {
       const query = (filters.searchQuery || '').toLowerCase();
       const matchesSearch = !query || 
                            (s.name || '').toLowerCase().includes(query) || 
@@ -328,13 +368,27 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
       const behaviorMatch = !filters.behavior || 
         normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
       
-      const timeMatch = !filters.time || (s.time && s.time.toUpperCase().includes(filters.time.toUpperCase())) || (s.shift && s.shift.toUpperCase().includes(filters.time.toUpperCase()));
+      const timeMatch = !filters.time || 
+        (s.time && s.time.toUpperCase().includes(filters.time.toUpperCase())) || 
+        (s.time2 && s.time2.toUpperCase().includes(filters.time.toUpperCase())) ||
+        (s.shift && s.shift.toUpperCase().includes(filters.time.toUpperCase()));
       
       return (s.category === 'DailyTask' || (s.shift && !s.category)) && 
              teacherMatch && assistantMatch && levelMatch && behaviorMatch && timeMatch &&
              (filters.showHidden || !s.isHidden);
-    }).sort((a, b) => (a.order || 0) - (b.order || 0));
-  }, [students, filters]);
+    });
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        const valA = String(a[sortConfig.key as keyof Student] || '').toLowerCase();
+        const valB = String(b[sortConfig.key as keyof Student] || '').toLowerCase();
+        return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      });
+    } else {
+      result.sort((a, b) => (a.order || 0) - (b.order || 0));
+    }
+    return result;
+  }, [students, filters, sortConfig]);
 
   const toggleTask = (studentId: string, date: Date, taskSlot: 1 | 2) => {
     const dateKey = format(date, 'yyyy-MM-dd');
@@ -541,8 +595,8 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                             <input 
                                 type="text"
                                 placeholder="Search tasks..."
-                                value={filters.searchQuery || ''}
-                                onChange={e => setFilters?.({ ...filters, searchQuery: e.target.value })}
+                                value={localSearch}
+                                onChange={e => setLocalSearch(e.target.value)}
                                 className="w-full h-11 pl-10 pr-4 bg-white/40 backdrop-blur-md border border-white/20 rounded-xl text-[11px] font-black uppercase text-slate-800 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500/50 shadow-md placeholder:text-slate-400"
                             />
                         </div>
@@ -642,9 +696,14 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                     <table className="w-full border-collapse table-fixed min-w-[1500px]">
                         <thead className="sticky top-0 z-40 bg-white/10 backdrop-blur-md">
                             <tr className="border-b border-white/5 uppercase text-[9px] font-black text-slate-800">
-                                <th className={`px-6 py-5 text-left border-r border-white/5 sticky top-0 z-50 transition-all group ${isFrozen ? 'bg-white shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-inherit'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
+                                <th 
+                                    onClick={() => handleSort('name')}
+                                    className={`px-6 py-5 text-left border-r border-white/5 sticky top-0 z-50 transition-all group cursor-pointer hover:bg-slate-50 ${isFrozen ? 'bg-white/95 shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white/80'}`} 
+                                    style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}
+                                >
                                     <div className="flex items-center justify-between">
                                       STUDENT NAME
+                                      <ArrowUpDown size={10} className={`${sortConfig?.key === 'name' ? 'opacity-100 text-orange-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
                                     </div>
                                     <div onMouseDown={onResizeStart} onTouchStart={onResizeStart} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity z-50" />
                                 </th>
@@ -679,126 +738,25 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                            {filteredStudents.map((s, idx) => {
-                                const rowBg = getRowBg(s.assistant);
-                                return (
-                                    <tr key={s.id} className={`h-12 transition-all hover:brightness-95 group ${rowBg} ${s.isHidden ? 'opacity-30' : ''}`}>
-                                        <td className={`px-6 border-r border-white/5 sticky z-30 transition-all ${isFrozen ? 'shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : 'bg-inherit'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
-                                            <div className="flex items-center gap-3 min-h-[44px]" style={{ backgroundColor: isFrozen ? 'white' : 'transparent' }}>
-                                                <div className={`w-1 h-8 rounded-full ${getLevelBorderColor(s.level).replace('border-l-', 'bg-')}`} />
-                                                <MultilineInput 
-                                                    value={s.name} 
-                                                    onChange={val => updateField(s.id, 'name', val)}
-                                                    className="w-full bg-transparent font-black text-slate-900 text-xs outline-none"
-                                                    style={{ color: '#0f172a' }}
-                                                />
-                                            </div>
-                                        </td>
-                                        <td className="text-center border-r border-white/5 bg-inherit" style={{ width: CHECKBOX_WIDTH }}>
-                                            <div className="min-h-[44px] flex items-center justify-center">
-                                                <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }}>
-                                                    {selectedIds.has(s.id) ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400/30" />}
-                                                </button>
-                                            </div>
-                                        </td>
-                                        <td className="text-center font-bold text-[10px] text-indigo-900/60 border-r border-white/5 bg-inherit" style={{ width: NUMBER_WIDTH }}>
-                                            <div className="min-h-[44px] flex items-center justify-center">
-                                                {idx + 1}
-                                            </div>
-                                        </td>
-                                        <td className="border-r border-white/5 px-2">
-                                            <select 
-                                                value={s.priority || 'MEDIUM'} 
-                                                onChange={e => updateField(s.id, 'priority', e.target.value)}
-                                                className="w-full h-8 bg-orange-500/10 text-orange-600 rounded-lg text-[9px] font-black text-center appearance-none cursor-pointer outline-none transition-all hover:bg-orange-500/20"
-                                            >
-                                                <option value="LOW">LOW</option>
-                                                <option value="MEDIUM">MEDIUM</option>
-                                                <option value="HIGH">HIGH</option>
-                                                <option value="CRITICAL">CRITICAL</option>
-                                            </select>
-                                        </td>
-                                        <td className="border-r border-white/5">
-                                            <MultilineInput 
-                                                value={s.energy || '1A + (5.1)'} 
-                                                onChange={val => updateField(s.id, 'energy', val)}
-                                                className="w-full h-8 px-2 bg-transparent text-[10px] font-bold text-slate-600 text-center outline-none"
-                                            />
-                                        </td>
-                                        <td className="border-r border-white/5 px-2">
-                                            <select 
-                                                value={s.phase || 'MORNING'} 
-                                                onChange={e => updateField(s.id, 'phase', e.target.value)}
-                                                className="w-full h-8 bg-emerald-500/10 text-emerald-600 rounded-lg text-[9px] font-black text-center appearance-none cursor-pointer outline-none transition-all hover:bg-emerald-500/20"
-                                            >
-                                                <option value="MORNING">MORNING</option>
-                                                <option value="AFTERNOON">AFTERNOON</option>
-                                                <option value="EVENING">EVENING</option>
-                                            </select>
-                                        </td>
-                                        <td className="border-r border-white/5">
-                                            <MultilineInput 
-                                                value={s.domain || 'Category'} 
-                                                onChange={val => updateField(s.id, 'domain', val)}
-                                                className="w-full h-8 px-2 bg-transparent text-[10px] font-medium text-slate-400 text-center outline-none"
-                                            />
-                                        </td>
-                                        <td className="border-r border-white/5">
-                                            <MultilineInput 
-                                                value={s.context || 'Group'} 
-                                                onChange={val => updateField(s.id, 'context', val)}
-                                                className="w-full h-8 px-2 bg-transparent text-[10px] font-medium text-slate-400 text-center outline-none"
-                                            />
-                                        </td>
-                                        <td className="border-r border-white/5 px-4 relative group/dd">
-                                            <div className="flex items-center justify-center gap-2 bg-white/20 px-2 py-1.5 rounded-lg border border-white/10 group-hover/dd:bg-white/40 transition-all">
-                                                <input 
-                                                    type="date"
-                                                    value={displayToIso(s.deadline || '')} 
-                                                    onChange={e => updateField(s.id, 'deadline', isoToDisplay(e.target.value))}
-                                                    className="w-full bg-transparent text-[10px] font-black text-orange-600 outline-none text-center cursor-pointer"
-                                                />
-                                            </div>
-                                        </td>
-                                        {days.map(day => {
-                                            const status1 = data.dailyTasks?.[s.id]?.[`${format(day, 'yyyy-MM-dd')}_1`];
-                                            const status2 = data.dailyTasks?.[s.id]?.[`${format(day, 'yyyy-MM-dd')}_2`];
-                                            return (
-                                                <td key={day.toString()} className="border-r border-white/5 p-0">
-                                                    <div className="flex h-12">
-                                                        <button 
-                                                            onClick={() => toggleTask(s.id, day, 1)}
-                                                            className="flex-1 flex items-center justify-center transition-all group/cell"
-                                                        >
-                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${status1 === 'Done' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : status1 === 'Not Yet' ? 'bg-indigo-500/80 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/40 border border-white/20'}`}>
-                                                                {status1 === 'Done' ? <CheckCircle2 size={16} /> : status1 === 'Not Yet' ? <Clock size={16} /> : <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />}
-                                                            </div>
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => toggleTask(s.id, day, 2)}
-                                                            className="flex-1 flex items-center justify-center transition-all group/cell"
-                                                        >
-                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${status2 === 'Done' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : status2 === 'Not Yet' ? 'bg-indigo-500/80 text-white shadow-lg shadow-indigo-500/20' : 'bg-white/40 border border-white/20'}`}>
-                                                                {status2 === 'Done' ? <CheckCircle2 size={16} /> : status2 === 'Not Yet' ? <Clock size={16} /> : <div className="w-1.5 h-1.5 bg-slate-200 rounded-full" />}
-                                                            </div>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            );
-                                        })}
-                                        <td className="text-center sticky right-0 bg-white/10 backdrop-blur-md border-l border-white/5">
-                                            <div className="flex items-center justify-center min-h-[44px] gap-2">
-                                                <button onClick={() => updateField(s.id, 'isHidden', !s.isHidden)} className={`p-1 text-slate-400 hover:text-indigo-600 ${s.isHidden ? 'text-indigo-600' : ''}`}>
-                                                    {s.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                                                </button>
-                                                <button onClick={() => removeEntry(s.id)} className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                            {filteredStudents.map((s, idx) => (
+                                <DailyTaskRow
+                                    key={s.id}
+                                    s={s}
+                                    idx={idx}
+                                    days={days}
+                                    isFrozen={isFrozen}
+                                    studentNameWidth={studentNameWidth}
+                                    CHECKBOX_WIDTH={CHECKBOX_WIDTH}
+                                    NUMBER_WIDTH={NUMBER_WIDTH}
+                                    selectedIds={selectedIds}
+                                    setSelectedIds={setSelectedIds}
+                                    updateField={updateField}
+                                    removeEntry={removeEntry}
+                                    getRowBg={getRowBg}
+                                    getLevelBorderColor={getLevelBorderColor}
+                                    getTaskStatusIcon={getStatusIcon}
+                                />
+                            ))}
                         </tbody>
                     </table>
                 </div>

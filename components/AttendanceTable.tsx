@@ -137,24 +137,24 @@ const AttendanceRow = React.memo(({
   const rowBgClass = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30';
 
   return (
-    <tr className={`group transition-all hover:brightness-95 h-8 ${isHidden ? 'bg-slate-50' : rowBgClass}`}>
+    <tr className={`group transition-all hover:brightness-95 h-8 ${isHidden ? 'bg-slate-50' : rowBgClass}`} style={{ height: '32px' }}>
       <td className={`px-5 border-r border-slate-200/10 shadow-sm ${isFrozen ? 'sticky z-20 shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : 'bg-inherit'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
         <div 
-          className={`font-black text-[#1B254B] uppercase tracking-tight truncate flex items-center min-h-[44px] ${isHidden ? 'opacity-30' : ''}`}
+          className={`font-black text-[#1B254B] uppercase tracking-tight truncate flex items-center min-h-[32px] ${isHidden ? 'opacity-30' : ''}`}
           style={{ fontSize: settings?.fontSize ? `${settings.fontSize}px` : '12px', color: '#1B254B' }}
         >
           {s.name}
         </div>
       </td>
       <td className={`px-0 text-center border-r border-slate-200/10 bg-inherit w-10`}>
-        <div className="flex items-center justify-center min-h-[44px]">
-          <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }} className="w-10 h-10 flex items-center justify-center hover:bg-black/5 rounded-md">
+        <div className="flex items-center justify-center min-h-[32px]">
+          <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }} className="w-8 h-8 flex items-center justify-center hover:bg-black/5 rounded-md">
             {selectedIds.has(s.id) ? <CheckSquare size={16} className="text-orange-600" /> : <Square size={16} className="text-slate-400/30" />}
           </button>
         </div>
       </td>
       <td className={`px-4 text-center text-xs font-black text-slate-400 border-r border-slate-200/10 bg-inherit w-12`}>
-        <div className="flex items-center justify-center min-h-[44px]">
+        <div className="flex items-center justify-center min-h-[32px]">
           {idx + 1}
         </div>
       </td>
@@ -173,9 +173,6 @@ const AttendanceRow = React.memo(({
       <td className="px-4 border-r border-slate-200/10">
         <div className="flex flex-col gap-0.5">
           <div className={`text-[11px] font-black text-[#1B254B] uppercase ${isHidden ? 'opacity-30' : ''}`}>{s.time || 'N/A'}</div>
-          {s.time2 && (
-            <div className={`text-[9px] font-bold text-slate-400 uppercase ${isHidden ? 'opacity-30' : ''}`}>{s.time2}</div>
-          )}
         </div>
       </td>
       <td className="px-4 border-r border-slate-200/10">
@@ -275,6 +272,20 @@ export const AttendanceTable: React.FC<Props> = ({
     document.removeEventListener('touchend', onResizeEnd);
   };
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [localSearch, setLocalSearch] = useState(filters.searchQuery || '');
+
+  useEffect(() => {
+    setLocalSearch(filters.searchQuery || '');
+  }, [filters.searchQuery]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== filters.searchQuery) {
+        setFilters?.({ ...filters, searchQuery: localSearch });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
 
   const monthKey = format(viewDate, 'yyyy-MM');
   const daysInMonth = getDaysInMonth(viewDate);
@@ -284,9 +295,6 @@ export const AttendanceTable: React.FC<Props> = ({
   const NUMBER_WIDTH = 45;
   const NAME_START = isFrozen ? (CHECKBOX_WIDTH + NUMBER_WIDTH) : 0;
 
-  /**
-   * Fixes: Error in file components/AttendanceTable.tsx on line 133: Cannot find name 'handleSort'.
-   */
   const handleSort = (key: string) => {
     setSortConfig(prev => {
       if (prev?.key === key) {
@@ -298,9 +306,9 @@ export const AttendanceTable: React.FC<Props> = ({
 
   const filteredStudents = useMemo(() => {
     let result = students.filter(s => {
-      const query = filters.searchQuery?.toLowerCase() || '';
+      const query = (filters.searchQuery || '').toLowerCase();
       const matchesSearch = !query || 
-        s.name.toLowerCase().includes(query) ||
+        (s.name || '').toLowerCase().includes(query) ||
         (s.assistant && s.assistant.toLowerCase().includes(query)) ||
         (s.time && s.time.toLowerCase().includes(query)) ||
         (s.time2 && s.time2.toLowerCase().includes(query)) ||
@@ -311,6 +319,10 @@ export const AttendanceTable: React.FC<Props> = ({
       const behaviorMatch = !filters.behavior || 
         normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
 
+      const timeMatch = !filters.time || 
+        (s.time && s.time.toUpperCase().includes(filters.time.toUpperCase())) ||
+        (s.time2 && s.time2.toUpperCase().includes(filters.time.toUpperCase()));
+
       return (s.category === 'Class' || s.category === 'Hall' || !s.category) && 
         (filters.showHidden || !s.isHidden) && 
         matchesSearch && 
@@ -318,7 +330,7 @@ export const AttendanceTable: React.FC<Props> = ({
         (!filters.assistant || (s.assistant && s.assistant.toUpperCase().includes(filters.assistant.toUpperCase()))) && 
         (!filters.level || (s.level && s.level.toUpperCase().includes(filters.level.toUpperCase()))) &&
         behaviorMatch &&
-        (!filters.time || (s.time && s.time.toUpperCase().includes(filters.time.toUpperCase())));
+        timeMatch;
     });
 
     if (sortConfig) {
@@ -328,10 +340,12 @@ export const AttendanceTable: React.FC<Props> = ({
         return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
       });
     } else {
-      result.sort((a, b) => a.order - b.order);
+      result.sort((a, b) => (a.order || 0) - (b.order || 0));
     }
     return result;
   }, [students, filters, sortConfig]);
+
+  const deferredStudents = React.useDeferredValue(filteredStudents);
 
   const cycleStatus = (studentId: string, day: number) => {
     if (isLocked) return;
@@ -519,8 +533,8 @@ export const AttendanceTable: React.FC<Props> = ({
                       type="text" 
                       placeholder="Search spreadsheet..." 
                       className="w-full h-9 pl-9 pr-3 bg-white border border-white/80 rounded-2xl shadow-sm text-[11px] font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all placeholder:text-slate-400"
-                      value={filters.searchQuery || ''}
-                      onChange={e => setFilters && setFilters({...filters, searchQuery: e.target.value})}
+                      value={localSearch}
+                      onChange={e => setLocalSearch(e.target.value)}
                   />
               </div>
 
@@ -575,7 +589,7 @@ export const AttendanceTable: React.FC<Props> = ({
             <thead className="sticky top-0 z-40 bg-white/[0.02] backdrop-blur-[2px] border-b border-white/5">
               <tr>
                 <th 
-                  className={`px-4 py-4 text-left text-[10px] font-black uppercase text-slate-400 tracking-widest border-r border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors group sticky top-0 z-50 ${isFrozen ? 'bg-white shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white'}`}
+                  className={`px-4 py-4 text-left text-[10px] font-black uppercase text-slate-400 tracking-widest border-r border-slate-100 cursor-pointer hover:bg-slate-50 transition-all group sticky top-0 z-50 ${isFrozen ? 'bg-white/95 shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white/80'}`}
                   style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}
                   onClick={() => handleSort('name')}
                 >
@@ -619,7 +633,7 @@ export const AttendanceTable: React.FC<Props> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredStudents.map((s, idx) => (
+              {deferredStudents.map((s, idx) => (
                 <AttendanceRow
                   key={s.id}
                   s={s}
