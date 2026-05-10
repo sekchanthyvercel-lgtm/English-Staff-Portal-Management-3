@@ -127,9 +127,105 @@ const getAssistantBgColor = (assistant: string): string => {
   return ASSISTANT_PALETTE[Math.abs(hash) % ASSISTANT_PALETTE.length];
 };
 
+import { normalizeBehavior } from '../src/lib/behaviorUtils';
+
+const StudentRow = React.memo(({ 
+    s, i, columns, visibleCols, studentNameWidth, isFrozen, settings, selectedIds, setSelectedIds, updateField, onDeleteStudent, isDeadlineDue, getAssistantBgColor 
+}: any) => {
+    const deadlineDue = isDeadlineDue(String(s.deadline || ''));
+    let rowBg = getAssistantBgColor(s.assistant || '');
+    let textColor = '#0f172a';
+    
+    if (deadlineDue) {
+        rowBg = 'rgba(255, 237, 213, 0.15)'; 
+        textColor = '#c2410c'; 
+    }
+    
+    if (s.headTeacher) {
+        rowBg = 'rgba(254, 226, 226, 0.15)'; 
+        textColor = '#b91c1c'; 
+    }
+
+    if (s.isHidden) {
+        rowBg = 'rgba(248, 250, 252, 0.1)';
+        textColor = '#475569';
+    }
+
+    return (
+        <tr className={`h-8 transition-all hover:brightness-95`} style={{ backgroundColor: rowBg, color: textColor }}>
+            <td className={`px-0 border-r border-slate-200/30 group ${isFrozen ? 'sticky z-20 shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : ''}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
+                <div className="flex items-center min-h-[32px] w-full" style={{ backgroundColor: isFrozen ? 'white' : 'transparent' }}>
+                    <MultilineInput 
+                        value={s.name || 'Student Name'} 
+                        onChange={val => updateField(s.id, 'name', val)} 
+                        className="w-full bg-transparent outline-none focus:bg-white/40 font-black tracking-tight px-3 py-1 scrollbar-none leading-tight" 
+                        style={{ color: '#1b254b', fontSize: settings?.fontSize ? `${settings.fontSize}px` : '11px' }} 
+                    />
+                </div>
+            </td>
+            <td className={`text-center border-r border-white/5`} style={{ width: 45 }}>
+                <div className="flex items-center justify-center min-h-[32px]">
+                    <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }} className="w-8 h-8 flex items-center justify-center hover:bg-black/10 rounded">
+                        {selectedIds.has(s.id) ? <CheckSquare size={16} className="text-primary-600" /> : <Square size={16} className="text-slate-400/30" />}
+                    </button>
+                </div>
+            </td>
+            <td className={`text-center text-[10px] font-black border-r border-slate-200/30`} style={{ color: '#94a3b8', width: 40 }}>
+                <div className="flex items-center justify-center min-h-[32px] leading-tight">
+                    {i + 1}
+                </div>
+            </td>
+            
+            {visibleCols.map((col: any) => (
+                <td 
+                    key={col.id} 
+                    className={`p-0 border-r border-slate-200/20 bg-inherit`}
+                    style={{ backgroundColor: rowBg }}
+                >
+                    <div className="flex items-center min-h-[32px] w-full">
+                        <MultilineInput 
+                            value={String(s[col.key] || '')} 
+                            onChange={val => updateField(s.id, col.key, val)} 
+                            className="w-full bg-transparent outline-none focus:bg-white/40 font-black tracking-tight transition-colors px-3 py-1 scrollbar-none leading-tight"
+                            style={{ color: textColor, fontSize: settings?.fontSize ? `${settings.fontSize}px` : '11px' }}
+                        />
+                    </div>
+                </td>
+            ))}
+
+            <td className="text-center border-r border-slate-200/20">
+                <button onClick={() => updateField(s.id, 'parentContact', !s.parentContact)} className="w-full h-full flex items-center justify-center transition-colors hover:bg-white/20">
+                    {s.parentContact ? <CheckSquare size={18} className="text-primary-600" /> : <Square size={18} className="text-slate-300/40" />}
+                </button>
+            </td>
+            <td className="text-center border-r border-slate-200/20">
+                <button onClick={() => updateField(s.id, 'headTeacher', !s.headTeacher)} className="w-full h-full flex items-center justify-center transition-colors hover:bg-white/20">
+                    {s.headTeacher ? <CheckSquare size={18} className="text-red-500" /> : <Square size={18} className="text-slate-300/40" />}
+                </button>
+            </td>
+
+            <td className="px-2 text-center">
+                <div className="flex items-center justify-center gap-2">
+                    <button onClick={() => updateField(s.id, 'isHidden', !s.isHidden)} className={`p-1.5 rounded-lg transition-all ${s.isHidden ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-indigo-600'}`}>
+                        {s.isHidden ? <Eye size={16}/> : <EyeOff size={16}/>}
+                    </button>
+                    <button onClick={() => onDeleteStudent?.(s.id)} className={`p-1.5 transition-all text-red-200 hover:text-red-500`}><Trash2 size={16} /></button>
+                </div>
+            </td>
+        </tr>
+    );
+}, (prev, next) => {
+    return prev.s === next.s && 
+           prev.i === next.i &&
+           prev.isFrozen === next.isFrozen &&
+           prev.studentNameWidth === next.studentNameWidth &&
+           prev.selectedIds === next.selectedIds &&
+           prev.settings?.fontSize === next.settings?.fontSize;
+});
+
 export const StudentTable: React.FC<StudentTableProps> = ({ 
   students, columns, onUpdate, onUpdateColumns, filters, setFilters, 
-  uniqueTeachers = [], uniqueAssistants = [], uniqueTimes = [], uniqueLevels = [], onQuickAdd, onAddStudent, onDeleteStudent,
+  uniqueTeachers = [], uniqueAssistants = [], uniqueTimes = [], uniqueLevels = [], uniqueBehaviors = [], onQuickAdd, onAddStudent, onDeleteStudent,
   role, onClearCategory, settings
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -166,6 +262,8 @@ export const StudentTable: React.FC<StudentTableProps> = ({
             String(s.assistant || '').toLowerCase().includes(query) ||
             String(s.teachers || '').toLowerCase().includes(query) ||
             String(s.level || '').toLowerCase().includes(query) ||
+            String(s.behavior || '').toLowerCase().includes(query) ||
+            String(s.time2 || '').toLowerCase().includes(query) ||
             String(s.time || '').toLowerCase().includes(query);
         
         // Exact Teacher filtering
@@ -178,7 +276,8 @@ export const StudentTable: React.FC<StudentTableProps> = ({
             
         const matchesTime = !filters.time || String(s.time || '').toUpperCase().includes(filters.time.toUpperCase());
         const matchesLevel = !filters.level || String(s.level || '').toUpperCase().includes(filters.level.toUpperCase());
-        const matchesBehavior = !filters.behavior || String(s.behavior || '').toUpperCase().includes(filters.behavior.toUpperCase());
+        const matchesBehavior = !filters.behavior || 
+            normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
         const matchesVisibility = filters.showHidden || !s.isHidden;
         const matchesCategory = s.category === 'Hall' || !s.category;
         
@@ -374,6 +473,13 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                   </div>
                   <div className="relative group">
                       <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                      <select value={filters.behavior} onChange={e => setFilters?.({...filters, behavior: e.target.value})} className={filterSelectStyle}>
+                          <option value="">Behaviors</option>
+                          {uniqueBehaviors.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                  </div>
+                  <div className="relative group">
+                      <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
                       <select value={filters.level} onChange={e => setFilters?.({...filters, level: e.target.value})} className={filterSelectStyle}>
                           <option value="">All Levels</option>
                           {uniqueLevels.map(l => <option key={l} value={l}>{l}</option>)}
@@ -503,94 +609,24 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                      {filteredStudents.map((s, i) => {
-                          const deadlineDue = isDeadlineDue(String(s.deadline || ''));
-                          
-                          // Priorities: Head Teacher (Soft Red) > Deadline (Soft Orange) > Assistant Palette
-                          let rowBg = getAssistantBgColor(s.assistant || '');
-                          let textColor = '#0f172a';
-                          
-                          if (deadlineDue) {
-                              rowBg = 'rgba(255, 237, 213, 0.15)'; // Orange (Orange 100)
-                              textColor = '#c2410c'; // High contrast dark orange text
-                          }
-                          
-                          if (s.headTeacher) {
-                              rowBg = 'rgba(254, 226, 226, 0.15)'; // Red (Red 100)
-                              textColor = '#b91c1c'; // High contrast dark red text
-                          }
-
-                          if (s.isHidden) {
-                              rowBg = 'rgba(248, 250, 252, 0.1)';
-                              textColor = '#475569';
-                          }
-
-                          return (
-                              <tr key={s.id} className={`h-8 transition-all hover:brightness-95`} style={{ backgroundColor: rowBg, color: textColor }}>
-                                 <td className={`px-0 border-r border-slate-200/30 group ${isFrozen ? 'sticky z-20 shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : ''}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
-                                    <div className="flex items-center min-h-[32px] w-full" style={{ backgroundColor: isFrozen ? 'white' : 'transparent' }}>
-                                        <MultilineInput 
-                                          value={s.name || 'Student Name'} 
-                                          onChange={val => updateField(s.id, 'name', val)} 
-                                          className="w-full bg-transparent outline-none focus:bg-white/40 font-black tracking-tight px-3 py-1 scrollbar-none leading-tight" 
-                                          style={{ color: '#1b254b', fontSize: settings?.fontSize ? `${settings.fontSize}px` : '11px' }} 
-                                        />
-                                    </div>
-                                </td>
-                                <td className={`text-center border-r border-white/5`} style={{ width: CHECKBOX_WIDTH }}>
-                                    <div className="flex items-center justify-center min-h-[44px]">
-                                        <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }} className="w-10 h-10 flex items-center justify-center hover:bg-black/10 rounded">
-                                          {selectedIds.has(s.id) ? <CheckSquare size={16} className="text-primary-600" /> : <Square size={16} className="text-slate-400/30" />}
-                                        </button>
-                                    </div>
-                                </td>
-                                <td className={`text-center text-[10px] font-black border-r border-slate-200/30`} style={{ color: '#94a3b8', width: NUMBER_WIDTH }}>
-                                    <div className="flex items-center justify-center min-h-[44px] leading-tight">
-                                        {i + 1}
-                                    </div>
-                                </td>
-                                
-                                 {columns.filter(c => c.visible).map((col) => {
-                                     return (
-                                       <td 
-                                           key={col.id} 
-                                           className={`p-0 border-r border-slate-200/20 bg-inherit`}
-                                           style={{ backgroundColor: rowBg }}
-                                       >
-                                          <div className="flex items-center min-h-[32px] w-full">
-                                              <MultilineInput 
-                                                  value={String(s[col.key] || '')} 
-                                                  onChange={val => updateField(s.id, col.key, val)} 
-                                                  className="w-full bg-transparent outline-none focus:bg-white/40 font-black tracking-tight transition-colors px-3 py-1 scrollbar-none leading-tight"
-                                                  style={{ color: textColor, fontSize: settings?.fontSize ? `${settings.fontSize}px` : '11px' }}
-                                              />
-                                          </div>
-                                      </td>
-                                    );
-                                })}
-
-                                <td className="text-center border-r border-slate-200/20">
-                                    <button onClick={() => updateField(s.id, 'parentContact', !s.parentContact)} className="w-full h-full flex items-center justify-center transition-colors hover:bg-white/20">
-                                        {s.parentContact ? <CheckSquare size={18} className="text-primary-600" /> : <Square size={18} className="text-slate-300/40" />}
-                                    </button>
-                                </td>
-                                <td className="text-center border-r border-slate-200/20">
-                                    <button onClick={() => updateField(s.id, 'headTeacher', !s.headTeacher)} className="w-full h-full flex items-center justify-center transition-colors hover:bg-white/20">
-                                        {s.headTeacher ? <CheckSquare size={18} className="text-red-500" /> : <Square size={18} className="text-slate-300/40" />}
-                                    </button>
-                                </td>
-
-                                <td className="px-2 text-center">
-                                    <div className="flex items-center justify-center gap-2">
-                                        <button onClick={() => updateField(s.id, 'isHidden', !s.isHidden)} className={`p-1.5 rounded-lg transition-all ${s.isHidden ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-indigo-600'}`}>
-                                            {s.isHidden ? <Eye size={16}/> : <EyeOff size={16}/>}
-                                        </button>
-                                        <button onClick={() => onDeleteStudent?.(s.id)} className={`p-1.5 transition-all text-red-200 hover:text-red-500`}><Trash2 size={16} /></button>
-                                    </div>
-                                </td>
-                            </tr>
-                          );
-                      })}
+                      {filteredStudents.map((s, i) => (
+                          <StudentRow
+                            key={s.id}
+                            s={s}
+                            i={i}
+                            columns={columns}
+                            visibleCols={columns.filter(c => c.visible)}
+                            studentNameWidth={studentNameWidth}
+                            isFrozen={isFrozen}
+                            settings={settings}
+                            selectedIds={selectedIds}
+                            setSelectedIds={setSelectedIds}
+                            updateField={updateField}
+                            onDeleteStudent={onDeleteStudent}
+                            isDeadlineDue={isDeadlineDue}
+                            getAssistantBgColor={getAssistantBgColor}
+                          />
+                      ))}
                   </tbody>
               </table>
           </div>

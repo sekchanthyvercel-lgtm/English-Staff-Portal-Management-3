@@ -35,6 +35,7 @@ import {
   addWeeks, 
   subWeeks 
 } from 'date-fns';
+import { normalizeBehavior } from '../src/lib/behaviorUtils';
 import { Student, AppData, FilterState, Tab, UserRole, AppSettings } from '../types';
 
 const MultilineInput: React.FC<{
@@ -81,6 +82,7 @@ interface DailyTaskTableProps {
   uniqueAssistants?: string[];
   uniqueLevels?: string[];
   uniqueTimes?: string[];
+  uniqueBehaviors?: string[];
   onUpdate: (data: AppData) => void;
   onAddStudent: (defaults: Partial<Student>) => void;
   onDeleteStudent?: (ids: string | string[], skipConfirm?: boolean) => void;
@@ -88,6 +90,148 @@ interface DailyTaskTableProps {
   onClearCategory?: (categories: string[]) => void;
   settings?: AppSettings;
 }
+
+const DailyTaskRow = React.memo(({ 
+    s, idx, days, isFrozen, studentNameWidth, CHECKBOX_WIDTH, NUMBER_WIDTH, selectedIds, setSelectedIds, updateField, removeEntry, 
+    getRowBg, getLevelBorderColor, getTaskStatusIcon
+}: any) => {
+    const rowBg = getRowBg(s.assistant);
+    return (
+        <tr className={`h-12 transition-all hover:brightness-95 group ${rowBg} ${s.isHidden ? 'opacity-30' : ''}`}>
+            <td className={`px-6 border-r border-white/5 sticky z-30 transition-all ${isFrozen ? 'shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : 'bg-inherit'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
+                <div className="flex items-center gap-3 min-h-[44px]" style={{ backgroundColor: isFrozen ? 'white' : 'transparent' }}>
+                    <div className={`w-1 h-8 rounded-full ${getLevelBorderColor(s.level).replace('border-l-', 'bg-')}`} />
+                    <MultilineInput 
+                        value={s.name} 
+                        onChange={val => updateField(s.id, 'name', val)}
+                        className="w-full bg-transparent font-black text-slate-900 text-xs outline-none"
+                        style={{ color: '#0f172a' }}
+                    />
+                </div>
+            </td>
+            <td className="text-center border-r border-white/5 bg-inherit" style={{ width: CHECKBOX_WIDTH }}>
+                <div className="min-h-[44px] flex items-center justify-center">
+                    <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }}>
+                        {selectedIds.has(s.id) ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400/30" />}
+                    </button>
+                </div>
+            </td>
+            <td className="text-center font-bold text-[10px] text-indigo-900/60 border-r border-white/5 bg-inherit" style={{ width: NUMBER_WIDTH }}>
+                <div className="min-h-[44px] flex items-center justify-center">
+                    {idx + 1}
+                </div>
+            </td>
+            <td className="border-r border-white/5 px-2">
+                <select 
+                    value={s.priority || 'MEDIUM'} 
+                    onChange={e => updateField(s.id, 'priority', e.target.value)}
+                    className="w-full h-8 bg-orange-500/10 text-orange-600 rounded-lg text-[9px] font-black text-center appearance-none cursor-pointer outline-none transition-all hover:bg-orange-500/20"
+                >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                </select>
+            </td>
+            <td className="border-r border-white/5">
+                <MultilineInput 
+                    value={s.energy || '1A + (5.1)'} 
+                    onChange={val => updateField(s.id, 'energy', val)}
+                    className="w-full h-8 px-2 bg-transparent text-[10px] font-bold text-slate-600 text-center outline-none"
+                />
+            </td>
+            <td className="border-r border-white/5 px-2">
+                <select 
+                    value={s.phase || 'MORNING'} 
+                    onChange={e => updateField(s.id, 'phase', e.target.value)}
+                    className="w-full h-8 bg-emerald-500/10 text-emerald-600 rounded-lg text-[9px] font-black text-center appearance-none cursor-pointer outline-none transition-all hover:bg-emerald-500/20"
+                >
+                    <option value="MORNING">MORNING</option>
+                    <option value="AFTERNOON">AFTERNOON</option>
+                    <option value="EVENING">EVENING</option>
+                </select>
+            </td>
+            <td className="border-r border-white/5">
+                <MultilineInput 
+                    value={s.domain || 'LITE'} 
+                    onChange={val => updateField(s.id, 'domain', val)}
+                    className="w-full h-8 px-2 bg-transparent text-[10px] font-bold text-slate-500 text-center uppercase outline-none"
+                />
+            </td>
+            <td className="border-r border-white/5">
+                <MultilineInput 
+                    value={s.context || 'SCHOOL'} 
+                    onChange={val => updateField(s.id, 'context', val)}
+                    className="w-full h-8 px-2 bg-transparent text-[10px] font-bold text-slate-500 text-center uppercase outline-none"
+                />
+            </td>
+            <td className="border-r border-white/5">
+                <MultilineInput 
+                    value={s.deadline || ''} 
+                    onChange={val => updateField(s.id, 'deadline', val)}
+                    className="w-full h-8 px-2 bg-transparent text-[10px] font-bold text-slate-400 text-center outline-none"
+                />
+            </td>
+            
+            {days.map((day: any) => {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const taskS1 = s.dailyTasks?.[dayKey]?.slot1;
+                const taskS2 = s.dailyTasks?.[dayKey]?.slot2;
+
+                return (
+                    <td key={day.toString()} className="border-r border-white/5 p-0 bg-inherit">
+                        <div className="flex divide-x divide-white/5 h-12">
+                            <div 
+                                onClick={() => {
+                                    const next = taskS1 === 'DONE' ? 'MISSED' : taskS1 === 'MISSED' ? undefined : 'DONE';
+                                    const dt = { ...(s.dailyTasks || {}), [dayKey]: { ...(s.dailyTasks?.[dayKey] || {}), slot1: next } };
+                                    updateField(s.id, 'dailyTasks', dt);
+                                }}
+                                className="flex-1 flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
+                            >
+                                {getTaskStatusIcon(taskS1)}
+                            </div>
+                            <div 
+                                onClick={() => {
+                                    const next = taskS2 === 'DONE' ? 'MISSED' : taskS2 === 'MISSED' ? undefined : 'DONE';
+                                    const dt = { ...(s.dailyTasks || {}), [dayKey]: { ...(s.dailyTasks?.[dayKey] || {}), slot2: next } };
+                                    updateField(s.id, 'dailyTasks', dt);
+                                }}
+                                className="flex-1 flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors"
+                            >
+                                {getTaskStatusIcon(taskS2)}
+                            </div>
+                        </div>
+                    </td>
+                );
+            })}
+            <td className="text-center sticky right-0 bg-white/10 backdrop-blur-md border-l border-white/5">
+                <div className="flex items-center justify-center min-h-[44px] gap-2">
+                    <button onClick={() => updateField(s.id, 'isHidden', !s.isHidden)} className={`p-1 text-slate-400 hover:text-indigo-600 ${s.isHidden ? 'text-indigo-600' : ''}`}>
+                        {s.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                    <button onClick={() => removeEntry(s.id)} className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+}, (prev, next) => {
+    return prev.s.id === next.s.id && 
+           prev.s.isHidden === next.s.isHidden &&
+           prev.s.name === next.s.name &&
+           prev.s.priority === next.s.priority &&
+           prev.s.energy === next.s.energy &&
+           prev.s.phase === next.s.phase &&
+           prev.s.domain === next.s.domain &&
+           prev.s.context === next.s.context &&
+           prev.s.deadline === next.s.deadline &&
+           JSON.stringify(prev.s.dailyTasks) === JSON.stringify(next.s.dailyTasks) &&
+           prev.isFrozen === next.isFrozen &&
+           prev.studentNameWidth === next.studentNameWidth &&
+           prev.selectedIds === next.selectedIds;
+});
 
 export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
   students,
@@ -98,6 +242,7 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
   uniqueAssistants = [],
   uniqueLevels = [],
   uniqueTimes = [],
+  uniqueBehaviors = [],
   onUpdate,
   onAddStudent,
   onDeleteStudent,
@@ -118,6 +263,7 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
   });
 
   const NUMBER_WIDTH = 40;
+  const CHECKBOX_WIDTH = 40;
   const NAME_START = 0;
 
   useEffect(() => {
@@ -167,6 +313,8 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
       const matchesSearch = !query || 
                            (s.name || '').toLowerCase().includes(query) || 
                            (s.level || '').toLowerCase().includes(query) ||
+                           (s.behavior || '').toLowerCase().includes(query) ||
+                           (s.time2 || '').toLowerCase().includes(query) ||
                            (s.shift || '').toLowerCase().includes(query) ||
                            (s.teachers || '').toLowerCase().includes(query) ||
                            (s.assistant || '').toLowerCase().includes(query) ||
@@ -176,10 +324,14 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
       const teacherMatch = !filters.teacher || (s.teachers && s.teachers.toUpperCase().includes(filters.teacher.toUpperCase()));
       const assistantMatch = !filters.assistant || (s.assistant && s.assistant.toUpperCase().includes(filters.assistant.toUpperCase()));
       const levelMatch = !filters.level || (s.level && s.level.toUpperCase().includes(filters.level.toUpperCase()));
+      
+      const behaviorMatch = !filters.behavior || 
+        normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
+      
       const timeMatch = !filters.time || (s.time && s.time.toUpperCase().includes(filters.time.toUpperCase())) || (s.shift && s.shift.toUpperCase().includes(filters.time.toUpperCase()));
       
       return (s.category === 'DailyTask' || (s.shift && !s.category)) && 
-             teacherMatch && assistantMatch && levelMatch && timeMatch &&
+             teacherMatch && assistantMatch && levelMatch && behaviorMatch && timeMatch &&
              (filters.showHidden || !s.isHidden);
     }).sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [students, filters]);
@@ -421,6 +573,17 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                             <div className="relative group">
                                 <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
                                 <select 
+                                    value={filters.behavior || ''} 
+                                    onChange={e => setFilters?.({ ...filters, behavior: e.target.value })} 
+                                    className={filterSelectStyle}
+                                >
+                                    <option value="">Behaviors</option>
+                                    {uniqueBehaviors.map(b => <option key={b} value={b}>{b}</option>)}
+                                </select>
+                            </div>
+                            <div className="relative group">
+                                <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                                <select 
                                     value={filters.level || ''} 
                                     onChange={e => setFilters?.({ ...filters, level: e.target.value })} 
                                     className={filterSelectStyle}
@@ -456,6 +619,19 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                         >
                             <Trash2 size={18} />
                         </button>
+                        {selectedIds.size > 0 && (
+                            <button 
+                                onClick={() => {
+                                    if (confirm(`Move ${selectedIds.size} records to Recycle Bin?`)) {
+                                        onDeleteStudent?.(Array.from(selectedIds), true);
+                                        setSelectedIds(new Set());
+                                    }
+                                }}
+                                className="px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black shadow-lg hover:bg-red-600 transition-all flex items-center gap-2"
+                            >
+                                <Trash size={14} /> DELETE ({selectedIds.size})
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -471,6 +647,13 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                                       STUDENT NAME
                                     </div>
                                     <div onMouseDown={onResizeStart} onTouchStart={onResizeStart} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-orange-500 opacity-0 group-hover:opacity-100 transition-opacity z-50" />
+                                </th>
+                                <th className="w-10 py-5 text-center border-r border-white/5 sticky top-0 bg-white/[0.05] z-40" style={{ width: CHECKBOX_WIDTH }}>
+                                  <div className="flex items-center justify-center">
+                                    <button onClick={() => setSelectedIds(selectedIds.size === filteredStudents.length ? new Set() : new Set(filteredStudents.map(s => s.id)))}>
+                                      {selectedIds.size > 0 ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400" />}
+                                    </button>
+                                  </div>
                                 </th>
                                 <th className="w-10 py-5 text-center border-r border-white/5 sticky top-0 bg-white/[0.05] z-40" style={{ width: NUMBER_WIDTH }}>#</th>
                                 <th className="w-28 py-5 text-center border-r border-white/5">Priority</th>
@@ -492,6 +675,7 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                                         </div>
                                     </th>
                                 ))}
+                                <th className="w-16 py-5 text-center border-l border-white/5 sticky right-0 bg-white/10 z-40">X</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
@@ -508,6 +692,13 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                                                     className="w-full bg-transparent font-black text-slate-900 text-xs outline-none"
                                                     style={{ color: '#0f172a' }}
                                                 />
+                                            </div>
+                                        </td>
+                                        <td className="text-center border-r border-white/5 bg-inherit" style={{ width: CHECKBOX_WIDTH }}>
+                                            <div className="min-h-[44px] flex items-center justify-center">
+                                                <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }}>
+                                                    {selectedIds.has(s.id) ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400/30" />}
+                                                </button>
                                             </div>
                                         </td>
                                         <td className="text-center font-bold text-[10px] text-indigo-900/60 border-r border-white/5 bg-inherit" style={{ width: NUMBER_WIDTH }}>
@@ -595,6 +786,16 @@ export const DailyTaskTable: React.FC<DailyTaskTableProps> = ({
                                                 </td>
                                             );
                                         })}
+                                        <td className="text-center sticky right-0 bg-white/10 backdrop-blur-md border-l border-white/5">
+                                            <div className="flex items-center justify-center min-h-[44px] gap-2">
+                                                <button onClick={() => updateField(s.id, 'isHidden', !s.isHidden)} className={`p-1 text-slate-400 hover:text-indigo-600 ${s.isHidden ? 'text-indigo-600' : ''}`}>
+                                                    {s.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                                                </button>
+                                                <button onClick={() => removeEntry(s.id)} className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 );
                             })}

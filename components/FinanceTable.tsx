@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { normalizeBehavior } from '../src/lib/behaviorUtils';
 import { Student, AppData, StudyType } from '../types';
-import { Search, ChevronLeft, ChevronRight, AlertCircle, Trash2, Lock } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, AlertCircle, Trash2, Lock, CheckSquare, Square, Trash } from 'lucide-react';
 import { format } from 'date-fns';
 
 const MultilineInput: React.FC<{
@@ -46,6 +47,7 @@ interface Props {
   onUpdate: (newData: AppData) => void; 
   onQuickAdd: (defaults: Partial<Student>) => void;
   onAddStudent: (defaults: Partial<Student>) => void;
+  onDeleteStudent?: (ids: string | string[], skipConfirm?: boolean) => void;
   isLocked?: boolean;
   filters: any;
   setFilters: (f: any) => void;
@@ -62,7 +64,37 @@ const DEFAULT_WIDTHS = {
   no: 48, id: 128, name: 208, fee: 112, months: 64, act: 80
 };
 
-export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuickAdd, onAddStudent, isLocked = false, filters, setFilters }) => {
+const FinanceRow = React.memo(({ 
+    s, i, year, MONTHS, widths, DEFAULT_WIDTHS, isFrozen, isLocked, getRowBg, handleUpdate, students, selectedIds, setSelectedIds, renderInputCell 
+}: any) => {
+    return (
+        <tr className={`hover:bg-white/20 group transition-colors ${getRowBg(i)}`}>
+            <td className="p-2 text-center border-r border-white/5 w-10">
+                <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }}>
+                    {selectedIds.has(s.id) ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400/30" />}
+                </button>
+            </td>
+            {renderInputCell(s, 'name', 'font-black text-slate-900 border-r border-white/5', false, undefined, isFrozen ? 0 : undefined)}
+            <td className="p-2 text-center text-slate-500 bg-transparent text-[10px] border-r border-white/5 font-black" style={{ width: widths['no'] || DEFAULT_WIDTHS.no }}>{i + 1}</td>
+            {renderInputCell(s, 'displayId', 'font-black text-slate-900 border-r border-white/5', false, undefined)}
+            {renderInputCell(s, 'schoolFee', 'font-black text-emerald-700 text-center')}
+            {MONTHS.map((m: any) => renderInputCell(s, `${year}-${m.key}`, `text-center font-black ${s.payments?.[`${year}-${m.key}`]?.toLowerCase() === 'paid' ? 'text-green-800' : 'text-emerald-800'}`, true, `${year}-${m.key}`))}
+            <td className="p-1 text-center sticky right-0 bg-white/[0.02] backdrop-blur-[1px] border-l border-white/5">
+                <button disabled={isLocked} onClick={() => { if (confirm('Permanently delete record?')) handleUpdate(students.filter((st: any) => st.id !== s.id)); }} className="p-2 text-slate-500 hover:text-red-500 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-30"><Trash2 size={16}/></button>
+            </td>
+        </tr>
+    );
+}, (prev, next) => {
+    return prev.s === next.s && 
+           prev.i === next.i &&
+           prev.year === next.year &&
+           prev.isFrozen === next.isFrozen &&
+           prev.isLocked === next.isLocked &&
+           prev.selectedIds === next.selectedIds &&
+           prev.widths === next.widths;
+});
+
+export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuickAdd, onAddStudent, onDeleteStudent, isLocked = false, filters, setFilters }) => {
   const [activeTab, setActiveTab] = useState<StudyType>('PartTime');
   const [selectedClass] = useState<string>('');
   const [year, setYear] = useState(new Date().getFullYear());
@@ -124,6 +156,8 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
         (s.displayId || '').toLowerCase().includes(query) ||
         (s.assistant || '').toLowerCase().includes(query) ||
         (s.teachers || '').toLowerCase().includes(query) ||
+        (s.time2 || '').toLowerCase().includes(query) ||
+        (s.behavior || '').toLowerCase().includes(query) ||
         (s.time || '').toLowerCase().includes(query) ||
         (s.level || '').toLowerCase().includes(query);
 
@@ -133,16 +167,22 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
       const matchesAssistant = !filters.assistant || 
           (s.assistant || '').toUpperCase().includes(filters.assistant.toUpperCase());
 
+      const behaviorMatch = !filters.behavior || 
+        normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
+
       return s.category === 'Office' &&
         (s.studyType || 'PartTime') === activeTab && 
         (!selectedClass || s.className === selectedClass) && 
         matchesSearch && 
         matchesTeacher &&
         matchesAssistant &&
+        behaviorMatch &&
         (showOnlyDue ? isStudentDue(s) : true) &&
         (filters.showHidden || !s.isHidden);
     }).sort((a, b) => a.order - b.order);
   }, [students, activeTab, selectedClass, filters, showOnlyDue, year]);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const getRowBg = (idx: number): string => {
     const colors = [
@@ -243,6 +283,20 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
              />
           </div>
           <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                  <button 
+                    disabled={isLocked}
+                    onClick={() => {
+                        if (confirm(`Move ${selectedIds.size} records to Recycle Bin?`)) {
+                            onDeleteStudent?.(Array.from(selectedIds), true);
+                            setSelectedIds(new Set());
+                        }
+                    }}
+                    className="px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black shadow-lg hover:bg-red-600 transition-all flex items-center gap-2"
+                  >
+                      <Trash2 size={14} /> DELETE ({selectedIds.size})
+                  </button>
+              )}
               <button disabled={isLocked} onClick={() => onQuickAdd({ studyType: activeTab, className: selectedClass, category: 'Office' })} className="px-5 py-2 bg-orange-600/90 text-white rounded-xl text-xs font-black uppercase shadow-lg disabled:opacity-30 backdrop-blur-[2px]">AI Add</button>
               <button disabled={isLocked} onClick={() => onAddStudent({ studyType: activeTab, className: selectedClass, category: 'Office' })} className="px-5 py-2 bg-orange-500/90 text-white rounded-xl text-xs font-black uppercase shadow-lg disabled:opacity-30 backdrop-blur-[2px]">Add Record</button>
           </div>
@@ -252,6 +306,11 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
         <table className="w-full border-collapse relative bg-transparent min-w-max table-fixed">
           <thead className="sticky top-0 z-40 bg-white shadow-sm border-b border-white/5 backdrop-blur-md">
             <tr className="bg-transparent">
+              <th className="p-3 bg-white/5 border-r border-white/5 w-10 text-center">
+                 <button onClick={() => setSelectedIds(selectedIds.size === filteredStudents.length ? new Set() : new Set(filteredStudents.map(s => s.id)))}>
+                     {selectedIds.size > 0 ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400" />}
+                 </button>
+              </th>
               <Th 
                 label="NAME" 
                 colId="name" 
@@ -271,21 +330,25 @@ export const FinanceTable: React.FC<Props> = ({ students, data, onUpdate, onQuic
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-             {filteredStudents.map((s, i) => {
-               const noWidth = widths['no'] || DEFAULT_WIDTHS.no;
-               const idWidth = widths['id'] || DEFAULT_WIDTHS.id;
-                return (
-               <tr key={s.id} className={`hover:bg-white/20 group transition-colors ${getRowBg(i)}`}>
-                 {renderInputCell(s, 'name', 'font-black text-slate-900 border-r border-white/5', false, undefined, isFrozen ? 0 : undefined)}
-                 <td className="p-2 text-center text-slate-500 bg-transparent text-[10px] border-r border-white/5 font-black" style={{ width: noWidth }}>{i + 1}</td>
-                 {renderInputCell(s, 'displayId', 'font-black text-slate-900 border-r border-white/5', false, undefined)}
-                 {renderInputCell(s, 'schoolFee', 'font-black text-emerald-700 text-center')}
-                 {MONTHS.map(m => renderInputCell(s, `${year}-${m.key}`, `text-center font-black ${s.payments?.[`${year}-${m.key}`]?.toLowerCase() === 'paid' ? 'text-green-800' : 'text-emerald-800'}`, true, `${year}-${m.key}`))}
-                 <td className="p-1 text-center sticky right-0 bg-white/[0.02] backdrop-blur-[1px] border-l border-white/5">
-                    <button disabled={isLocked} onClick={() => { if (confirm('Permanently delete record?')) handleUpdate(students.filter(st => st.id !== s.id)); }} className="p-2 text-slate-500 hover:text-red-500 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-30"><Trash2 size={16}/></button>
-                 </td>
-               </tr>
-             )})}
+             {filteredStudents.map((s, i) => (
+                <FinanceRow
+                  key={s.id}
+                  s={s}
+                  i={i}
+                  year={year}
+                  MONTHS={MONTHS}
+                  widths={widths}
+                  DEFAULT_WIDTHS={DEFAULT_WIDTHS}
+                  isFrozen={isFrozen}
+                  isLocked={isLocked}
+                  getRowBg={getRowBg}
+                  handleUpdate={handleUpdate}
+                  students={students}
+                  selectedIds={selectedIds}
+                  setSelectedIds={setSelectedIds}
+                  renderInputCell={renderInputCell}
+                />
+             ))}
           </tbody>
         </table>
       </div>

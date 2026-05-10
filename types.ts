@@ -39,6 +39,9 @@ export interface Student {
   photo?: string;
   photoAdjust?: PhotoAdjust;
   thumbprintNotes?: string;
+  time2?: string;
+  subject?: string;
+  behavior?: string;
   [key: string]: any; // Support for dynamic columns
 }
 
@@ -135,9 +138,10 @@ export interface FilterState {
   searchQuery: string; 
   teacher: string;
   assistant: string;
-  time: string;
-  level: string;
   behavior: string;
+  time: string;
+  time2: string;
+  level: string;
   deadline: string;
   showHidden: boolean;
 }

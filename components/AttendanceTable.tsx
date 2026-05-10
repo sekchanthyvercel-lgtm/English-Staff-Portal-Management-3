@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, AppData, UserRole, AppSettings, StudentCategory } from '../types';
 import { format, addDays, getDaysInMonth, startOfMonth } from 'date-fns';
+import { normalizeBehavior } from '../src/lib/behaviorUtils';
 import { 
   Plus, UserCheck, 
   ChevronLeft, ChevronRight, ArrowUpDown, Calendar, Maximize2,
@@ -18,6 +19,7 @@ interface Props {
   uniqueAssistants: string[];
   uniqueLevels: string[];
   uniqueTimes: string[];
+  uniqueBehaviors?: string[];
   onUpdate: (newData: AppData) => void;
   onAddStudent: (defaults: Partial<Student>) => void;
   onDeleteStudent?: (ids: string | string[], skipConfirm?: boolean) => void;
@@ -118,9 +120,111 @@ const getStatusIcon = (status?: number) => {
   );
 };
 
+// Memoized Status Icon component for better performance
+const StatusIcon = React.memo(({ status }: { status: number | undefined }) => {
+  if (status === 0) return <div className="w-1.5 h-1.5 bg-sky-500 rounded-full shadow-[0_0_8px_rgba(14,165,233,0.5)]" />;
+  if (status === 0.25) return <Zap size={10} className="text-amber-500 fill-amber-500" />;
+  if (status === 1) return <div className="w-1.5 h-1.5 bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.5)]" />;
+  if (status === 2) return <div className="w-2.5 h-2.5 border-2 border-emerald-500 rounded-sm" />;
+  return null;
+});
+
+const AttendanceRow = React.memo(({ 
+  s, idx, daysInMonth, monthKey, attendance, isFrozen, studentNameWidth, settings, isCurrentDay, cycleStatus, onUpdate, data, students, 
+  getTeacherColor, getAssistantColor, selectedIds, setSelectedIds
+}: any) => {
+  const isHidden = s.isHidden;
+  const rowBgClass = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30';
+
+  return (
+    <tr className={`group transition-all hover:brightness-95 h-8 ${isHidden ? 'bg-slate-50' : rowBgClass}`}>
+      <td className={`px-5 border-r border-slate-200/10 shadow-sm ${isFrozen ? 'sticky z-20 shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : 'bg-inherit'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
+        <div 
+          className={`font-black text-[#1B254B] uppercase tracking-tight truncate flex items-center min-h-[44px] ${isHidden ? 'opacity-30' : ''}`}
+          style={{ fontSize: settings?.fontSize ? `${settings.fontSize}px` : '12px', color: '#1B254B' }}
+        >
+          {s.name}
+        </div>
+      </td>
+      <td className={`px-0 text-center border-r border-slate-200/10 bg-inherit w-10`}>
+        <div className="flex items-center justify-center min-h-[44px]">
+          <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }} className="w-10 h-10 flex items-center justify-center hover:bg-black/5 rounded-md">
+            {selectedIds.has(s.id) ? <CheckSquare size={16} className="text-orange-600" /> : <Square size={16} className="text-slate-400/30" />}
+          </button>
+        </div>
+      </td>
+      <td className={`px-4 text-center text-xs font-black text-slate-400 border-r border-slate-200/10 bg-inherit w-12`}>
+        <div className="flex items-center justify-center min-h-[44px]">
+          {idx + 1}
+        </div>
+      </td>
+      <td className="px-4 border-r border-slate-200/10">
+        <div className="flex flex-wrap gap-1">
+          {(s.teachers || 'N/A').split('&').map((t: string, i: number) => (
+            <div key={i} className={`text-[10px] font-black ${getTeacherColor(t.trim())} px-2 py-0.5 rounded backdrop-blur-sm uppercase truncate ${isHidden ? 'opacity-30' : ''}`}>
+              {t.trim()}
+            </div>
+          ))}
+        </div>
+      </td>
+      <td className="px-4 border-r border-slate-200/10 text-center">
+        <div className={`text-[11px] font-black text-[#1B254B] uppercase ${isHidden ? 'opacity-30' : ''}`}>{s.level || 'N/A'}</div>
+      </td>
+      <td className="px-4 border-r border-slate-200/10">
+        <div className="flex flex-col gap-0.5">
+          <div className={`text-[11px] font-black text-[#1B254B] uppercase ${isHidden ? 'opacity-30' : ''}`}>{s.time || 'N/A'}</div>
+          {s.time2 && (
+            <div className={`text-[9px] font-bold text-slate-400 uppercase ${isHidden ? 'opacity-30' : ''}`}>{s.time2}</div>
+          )}
+        </div>
+      </td>
+      <td className="px-4 border-r border-slate-200/10">
+        <div className={`text-[11px] font-black ${getAssistantColor(s.assistant || '')} px-2 py-0.5 rounded backdrop-blur-md w-max uppercase tracking-widest shadow-sm ${isHidden ? 'opacity-30' : ''}`}>{s.assistant || 'N/A'}</div>
+      </td>
+      
+      {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+          const dayKey = `${monthKey}-${String(day).padStart(2, '0')}`;
+          const status = attendance[dayKey];
+          const isCurrentCol = isCurrentDay(day);
+
+          return (
+            <td 
+              key={day} 
+              onClick={() => cycleStatus(s.id, day)}
+              className={`p-0 border-r border-slate-200/10 cursor-pointer transition-colors ${isCurrentCol ? 'bg-orange-500/5' : ''}`}
+            >
+              <div className={`w-full h-full flex items-center justify-center ${isHidden ? 'opacity-20 grayscale' : ''}`}>
+                  <StatusIcon status={status} />
+              </div>
+            </td>
+          );
+      })}
+
+      <td className="px-4 bg-inherit border-l border-slate-200/10 shadow-[-2px_0_4px_rgba(0,0,0,0.02)]">
+        <div className="flex items-center justify-center gap-2">
+          <button 
+            onClick={() => onUpdate({ ...data, students: students.map((st: any) => st.id === s.id ? { ...st, isHidden: !isHidden } : st) })}
+            className={`p-1.5 rounded-lg transition-all ${isHidden ? 'bg-[#1B254B] text-white' : 'text-slate-300 hover:text-primary-500 hover:bg-white'}`}
+          >
+            {isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}, (prev, next) => {
+    return prev.s.id === next.s.id && 
+           prev.s.isHidden === next.s.isHidden && 
+           JSON.stringify(prev.attendance) === JSON.stringify(next.attendance) &&
+           prev.studentNameWidth === next.studentNameWidth &&
+           prev.isFrozen === next.isFrozen &&
+           prev.settings?.fontSize === next.settings?.fontSize &&
+           prev.selectedIds === next.selectedIds;
+});
+
 export const AttendanceTable: React.FC<Props> = ({ 
   students, data, filters, setFilters, 
-  uniqueTeachers = [], uniqueAssistants = [], uniqueLevels = [], uniqueTimes = [],
+  uniqueTeachers = [], uniqueAssistants = [], uniqueLevels = [], uniqueTimes = [], uniqueBehaviors = [],
   onUpdate, onAddStudent, onDeleteStudent, isLocked = false, role, onClearCategory, settings
 }) => {
   const [viewDate, setViewDate] = useState(new Date());
@@ -199,8 +303,13 @@ export const AttendanceTable: React.FC<Props> = ({
         s.name.toLowerCase().includes(query) ||
         (s.assistant && s.assistant.toLowerCase().includes(query)) ||
         (s.time && s.time.toLowerCase().includes(query)) ||
+        (s.time2 && s.time2.toLowerCase().includes(query)) ||
+        (s.behavior && s.behavior.toLowerCase().includes(query)) ||
         (s.level && s.level.toLowerCase().includes(query)) ||
         (s.teachers && s.teachers.toLowerCase().includes(query));
+
+      const behaviorMatch = !filters.behavior || 
+        normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
 
       return (s.category === 'Class' || s.category === 'Hall' || !s.category) && 
         (filters.showHidden || !s.isHidden) && 
@@ -208,6 +317,7 @@ export const AttendanceTable: React.FC<Props> = ({
         (!filters.teacher || (s.teachers && s.teachers.toUpperCase().includes(filters.teacher.toUpperCase()))) && 
         (!filters.assistant || (s.assistant && s.assistant.toUpperCase().includes(filters.assistant.toUpperCase()))) && 
         (!filters.level || (s.level && s.level.toUpperCase().includes(filters.level.toUpperCase()))) &&
+        behaviorMatch &&
         (!filters.time || (s.time && s.time.toUpperCase().includes(filters.time.toUpperCase())));
     });
 
@@ -431,6 +541,13 @@ export const AttendanceTable: React.FC<Props> = ({
                   </div>
                   <div className="relative group">
                       <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <select value={filters.behavior || ''} onChange={e => setFilters && setFilters({...filters, behavior: e.target.value})} className={filterSelectStyle}>
+                          <option value="">Behaviors</option>
+                          {uniqueBehaviors.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                  </div>
+                  <div className="relative group">
+                      <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <select value={filters.level || ''} onChange={e => setFilters && setFilters({...filters, level: e.target.value})} className={filterSelectStyle}>
                           <option value="">All Levels</option>
                           {uniqueLevels.map(l => <option key={l} value={l}>{l}</option>)}
@@ -502,93 +619,28 @@ export const AttendanceTable: React.FC<Props> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredStudents.map((s, idx) => {
-                const rowBgClass = getRowBg(idx);
-                const isHidden = s.isHidden;
-
-                return (
-                  <tr 
-                    key={s.id} 
-                    className={`group transition-all hover:brightness-95 h-8 ${isHidden ? 'bg-slate-50' : rowBgClass}`}
-                  >
-                    <td className={`px-5 border-r border-slate-200/10 shadow-sm ${isFrozen ? 'sticky z-20 shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : 'bg-inherit'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
-                      <div 
-                        className={`font-black text-[#1B254B] uppercase tracking-tight truncate flex items-center min-h-[44px] ${isHidden ? 'opacity-30' : ''}`}
-                        style={{ fontSize: settings?.fontSize ? `${settings.fontSize}px` : '12px', color: '#1B254B' }}
-                      >
-                        {s.name}
-                      </div>
-                    </td>
-                    <td className={`px-0 text-center border-r border-slate-200/10 bg-inherit w-10`}>
-                      <div className="flex items-center justify-center min-h-[44px]">
-                        <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }} className="w-10 h-10 flex items-center justify-center hover:bg-black/5 rounded-md">
-                          {selectedIds.has(s.id) ? <CheckSquare size={16} className="text-orange-600" /> : <Square size={16} className="text-slate-400/30" />}
-                        </button>
-                      </div>
-                    </td>
-                    <td className={`px-4 text-center text-xs font-black text-slate-400 border-r border-slate-200/10 bg-inherit w-12`}>
-                      <div className="flex items-center justify-center min-h-[44px]">
-                        {idx + 1}
-                      </div>
-                    </td>
-                    <td className="px-4 border-r border-slate-200/10">
-                      <div className="flex flex-wrap gap-1">
-                        {(s.teachers || 'N/A').split('&').map((t, i) => (
-                          <div key={i} className={`text-[10px] font-black ${getTeacherColor(t.trim())} px-2 py-0.5 rounded backdrop-blur-sm uppercase truncate ${isHidden ? 'opacity-30' : ''}`}>
-                            {t.trim()}
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 border-r border-slate-200/10 text-center">
-                      <div className={`text-[11px] font-black text-[#1B254B] uppercase ${isHidden ? 'opacity-30' : ''}`}>{s.level || 'N/A'}</div>
-                    </td>
-                    <td className="px-4 border-r border-slate-200/10">
-                      <div className={`text-[11px] font-black text-[#1B254B] uppercase ${isHidden ? 'opacity-30' : ''}`}>{s.time || 'N/A'}</div>
-                    </td>
-                    <td className="px-4 border-r border-slate-200/10">
-                      <div className={`text-[11px] font-black ${getAssistantColor(s.assistant || '')} px-2 py-0.5 rounded backdrop-blur-md w-max uppercase tracking-widest shadow-sm ${isHidden ? 'opacity-30' : ''}`}>{s.assistant || 'N/A'}</div>
-                    </td>
-                    
-                    {/* Dynamic Date Columns */}
-                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-                        const dayKey = `${monthKey}-${String(day).padStart(2, '0')}`;
-                        const status = data.attendance[s.id]?.[dayKey];
-                        const isCurrentColumn = parseInt(dayDisplay) === day;
-
-                        return (
-                          <td 
-                            key={day} 
-                            onClick={() => cycleStatus(s.id, day)}
-                            className={`p-0 border-r border-slate-200/10 cursor-pointer transition-colors ${isCurrentColumn ? 'bg-orange-500/5' : ''}`}
-                          >
-                            <div className={`w-full h-full flex items-center justify-center ${isHidden ? 'opacity-20 grayscale' : ''}`}>
-                                {getStatusIcon(status)}
-                            </div>
-                          </td>
-                        );
-                    })}
-
-                    {/* Actions Column */}
-                    <td className="px-4 bg-inherit border-l border-slate-200/10 shadow-[-2px_0_4px_rgba(0,0,0,0.02)]">
-                      <div className="flex items-center justify-center gap-2">
-                        <button 
-                          onClick={() => onUpdate({ ...data, students: students.map(st => st.id === s.id ? { ...st, isHidden: !isHidden } : st) })}
-                          className={`p-1.5 rounded-lg transition-all ${isHidden ? 'bg-[#1B254B] text-white' : 'text-slate-300 hover:text-primary-500 hover:bg-white'}`}
-                        >
-                          {isHidden ? <Eye size={16}/> : <EyeOff size={16}/>}
-                        </button>
-                        <button 
-                          onClick={() => onDeleteStudent?.(s.id)}
-                          className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-white rounded-lg transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredStudents.map((s, idx) => (
+                <AttendanceRow
+                  key={s.id}
+                  s={s}
+                  idx={idx}
+                  daysInMonth={daysInMonth}
+                  monthKey={monthKey}
+                  attendance={data.attendance[s.id] || {}}
+                  isFrozen={isFrozen}
+                  studentNameWidth={studentNameWidth}
+                  settings={settings}
+                  isCurrentDay={(day: number) => parseInt(dayDisplay) === day}
+                  cycleStatus={cycleStatus}
+                  onUpdate={onUpdate}
+                  data={data}
+                  students={students}
+                  getTeacherColor={getTeacherColor}
+                  getAssistantColor={getAssistantColor}
+                  selectedIds={selectedIds}
+                  setSelectedIds={setSelectedIds}
+                />
+              ))}
             </tbody>
           </table>
         </div>

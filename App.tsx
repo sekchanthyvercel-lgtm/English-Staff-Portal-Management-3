@@ -17,6 +17,7 @@ import { Dashboard } from './components/Dashboard';
 import { AppData, Student, CurrentUser, UserRole, ColumnConfig, Tab, ViewMode, AppSettings, StudentCategory } from './types';
 import { subscribeToData, saveData } from './services/firebase';
 import { exportFullBackup, importFromExcel } from './services/excelService';
+import { normalizeBehavior } from './src/lib/behaviorUtils';
 import { Download, Upload, Menu, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { addMonths, format } from 'date-fns';
@@ -27,7 +28,8 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'c3', key: 'level', label: 'LEVEL', width: 85, visible: true, type: 'text' },
   { id: 'c5', key: 'behavior', label: 'BEHAVIOR', width: 180, visible: true, type: 'text' },
   { id: 'c_schedule', key: 'schedule', label: 'SCHEDULE', width: 140, visible: true, type: 'text' },
-  { id: 'c4', key: 'time', label: 'TIME', width: 110, visible: true, type: 'text' },
+  { id: 'c4', key: 'time', label: 'TIME 1', width: 110, visible: true, type: 'text' },
+  { id: 'c10', key: 'time2', label: 'TIME 2', width: 110, visible: true, type: 'text' },
   { id: 'c_subject', key: 'subject', label: 'SUBJECT', width: 120, visible: true, type: 'text' },
   { id: 'c6', key: 'duration', label: 'DURATION', width: 100, visible: true, type: 'text' },
   { id: 'c7', key: 'startDate', label: 'START', width: 100, visible: true, type: 'text' },
@@ -70,9 +72,10 @@ const App: React.FC = () => {
     searchQuery: '', 
     teacher: '', 
     assistant: '',
+    behavior: '',
     time: '', 
+    time2: '',
     level: '', 
-    behavior: '', 
     deadline: '', 
     showHidden: false,
     attendanceTab: 'PartTime',
@@ -208,6 +211,7 @@ const App: React.FC = () => {
     const tm = new Set<string>();
     allActiveStudents.forEach(s => {
       if (s.time) String(s.time).split('&').forEach(t => tm.add(t.trim()));
+      if (s.time2) String(s.time2).split('&').forEach(t => tm.add(t.trim()));
     });
     return Array.from(tm).filter(Boolean).sort();
   }, [allActiveStudents]);
@@ -222,8 +226,13 @@ const App: React.FC = () => {
 
   const uniqueBehaviors = useMemo(() => {
     const bh = new Set<string>();
-    allActiveStudents.forEach(s => s.behavior && bh.add(String(s.behavior).trim()));
-    return Array.from(bh).filter(Boolean).sort();
+    allActiveStudents.forEach(s => {
+      if (s.behavior) {
+        const n = normalizeBehavior(String(s.behavior));
+        if (n) bh.add(n);
+      }
+    });
+    return Array.from(bh).sort();
   }, [allActiveStudents]);
 
   useEffect(() => {
@@ -567,7 +576,7 @@ const App: React.FC = () => {
                 settings={data.settings}
               />
             )}
-            {activeTab === Tab.Penalty && (
+           {activeTab === Tab.Penalty && (
               <PenaltyTable 
                 students={allActiveStudents} 
                 onUpdate={students => handleUpdate({...data, students: [...students, ...data.students.filter(s => s.deletedAt)]})} 
@@ -577,6 +586,7 @@ const App: React.FC = () => {
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
                 uniqueLevels={uniqueLevels}
+                uniqueBehaviors={uniqueBehaviors}
                 onQuickAdd={() => setIsAiOpen(true)} 
                 onAddStudent={(defaults) => handleAddStudent(defaults)} 
                 role={currentUser.role}
@@ -596,6 +606,7 @@ const App: React.FC = () => {
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
                 uniqueLevels={uniqueLevels}
+                uniqueBehaviors={uniqueBehaviors}
                 onQuickAdd={() => setIsAiOpen(true)} 
                 onAddStudent={(defaults) => handleAddStudent(defaults)} 
                 role={currentUser.role}
@@ -617,6 +628,7 @@ const App: React.FC = () => {
                 uniqueAssistants={uniqueAssistants}
                 uniqueLevels={uniqueLevels}
                 uniqueTimes={uniqueTimes}
+                uniqueBehaviors={uniqueBehaviors}
                 onAddStudent={(defaults) => handleAddStudent(defaults)} 
                 role={currentUser.role}
                 onClearCategory={handleClearCategory}
@@ -648,6 +660,7 @@ const App: React.FC = () => {
                 uniqueAssistants={uniqueAssistants}
                 uniqueLevels={uniqueLevels}
                 uniqueTimes={uniqueTimes}
+                uniqueBehaviors={uniqueBehaviors}
                 onUpdate={handleUpdate} 
                 onAddStudent={handleAddStudent}
                 onQuickAdd={() => setIsAiOpen(true)}
@@ -694,12 +707,13 @@ const App: React.FC = () => {
                 setFilters={setFilters}
                 uniqueTeachers={uniqueTeachers}
                 uniqueAssistants={uniqueAssistants}
+                uniqueBehaviors={uniqueBehaviors}
                 onSelectTeacher={(name) => {
-                  setFilters({ ...filters, teacher: name, assistant: '', searchQuery: '' });
+                  setFilters({ ...filters, teacher: name, assistant: '', behavior: '', searchQuery: '' });
                   setActiveTab(Tab.Hall);
                 }}
                 onSelectAssistant={(name) => {
-                  setFilters({ ...filters, assistant: name, teacher: '', searchQuery: '' });
+                  setFilters({ ...filters, assistant: name, teacher: '', behavior: '', searchQuery: '' });
                   setActiveTab(Tab.Hall);
                 }}
               />

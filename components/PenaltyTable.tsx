@@ -50,6 +50,7 @@ interface PenaltyTableProps {
   uniqueTeachers?: string[];
   uniqueAssistants?: string[];
   uniqueLevels?: string[];
+  uniqueBehaviors?: string[];
   onQuickAdd?: () => void;
   onAddStudent?: (defaults: Partial<Student>) => void;
   onDeleteStudent?: (ids: string | string[], skipConfirm?: boolean) => void;
@@ -60,11 +61,129 @@ interface PenaltyTableProps {
   title?: string;
 }
 
+import { normalizeBehavior } from '../src/lib/behaviorUtils';
+
+const PenaltyRow = React.memo(({ 
+    s, idx, studentNameWidth, isFrozen, settings, selectedIds, setSelectedIds, updateField, onDeleteStudent, getRowBg, displayToIso, isoToDisplay 
+}: any) => {
+    return (
+        <tr className={`h-8 hover:bg-white/20 transition-colors group ${getRowBg(idx)} ${s.isHidden ? 'opacity-30' : ''}`}>
+            <td className={`border-r border-slate-100 group ${isFrozen ? 'sticky z-20 shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : 'bg-white/60'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
+                <div className="flex items-center min-h-[32px] w-full" style={{ backgroundColor: isFrozen ? 'white' : 'transparent' }}>
+                    <MultilineInput 
+                        value={s.name || ''} 
+                        onChange={val => updateField(s.id, 'name', val)} 
+                        className="w-full bg-transparent outline-none px-3 py-1 font-black text-[#1B254B] leading-tight" 
+                        style={{ fontSize: settings?.fontSize ? `${settings.fontSize}px` : '11px', color: '#1B254B' }}
+                    />
+                </div>
+            </td>
+            <td className={`border-r border-slate-100 text-center bg-white/60`}>
+                <div className="flex items-center justify-center min-h-[32px]">
+                    <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }}>
+                        {selectedIds.has(s.id) ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400/30" />}
+                    </button>
+                </div>
+            </td>
+            <td className={`border-r border-slate-100 text-center text-[10px] font-bold text-slate-400 bg-slate-50/40`}>
+                <div className="flex items-center justify-center min-h-[32px]">
+                    {idx + 1}
+                </div>
+            </td>
+            <td className="border-r border-slate-100 bg-orange-50/60 text-center">
+                <select 
+                    value={s.thumbprint || ''} 
+                    onChange={e => updateField(s.id, 'thumbprint', e.target.value)}
+                    className="w-full h-full px-3 text-[11px] font-black text-orange-600 bg-transparent outline-none appearance-none text-center cursor-pointer"
+                >
+                    <option value="">-</option>
+                    {[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+            </td>
+            <td className="border-r border-slate-100">
+                <MultilineInput value={s.behavior1 || ''} onChange={val => updateField(s.id, 'behavior1', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-medium text-slate-700 text-center" />
+            </td>
+            <td className="border-r border-slate-100">
+                <MultilineInput value={s.behavior2 || ''} onChange={val => updateField(s.id, 'behavior2', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-medium text-slate-700 text-center" />
+            </td>
+            <td className="border-r border-slate-100">
+                <MultilineInput value={s.behavior3 || ''} onChange={val => updateField(s.id, 'behavior3', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-medium text-slate-700 text-center" />
+            </td>
+            <td className="border-r border-slate-100">
+                <MultilineInput value={s.teachers || ''} onChange={val => updateField(s.id, 'teachers', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-bold text-slate-500 uppercase" />
+            </td>
+            <td className="border-r border-slate-100">
+                <MultilineInput value={s.assistant || ''} onChange={val => updateField(s.id, 'assistant', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-black text-orange-600 uppercase" />
+            </td>
+            <td className="border-r border-slate-100">
+                <MultilineInput value={s.level || ''} onChange={val => updateField(s.id, 'level', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-black text-slate-600 text-center" />
+            </td>
+
+            {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                <React.Fragment key={num}>
+                    <td className={`border-r border-slate-100 bg-orange-50/20`}>
+                        <select 
+                            value={s[`penaltyType${num}`] || ''} 
+                            onChange={e => updateField(s.id, `penaltyType${num}`, e.target.value)}
+                            className="w-full h-full px-3 text-[10px] font-black text-[#1B254B] bg-transparent outline-none appearance-none text-center"
+                        >
+                            <option value="">-</option>
+                            <option value="Lateness">Lateness</option>
+                            <option value="Absence">Absence</option>
+                            <option value="Wrong Shoes">Wrong Shoes</option>
+                            <option value="No cards">No cards</option>
+                            <option value="Wrong Uniforms">Wrong Uniforms</option>
+                            <option value="Late Check (Normal)">Late Check (Normal)</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </td>
+                    <td className="border-r border-slate-100">
+                        <input 
+                            type="date"
+                            value={displayToIso(s[`penaltyDate${num}`] || '')} 
+                            onChange={e => updateField(s.id, `penaltyDate${num}`, isoToDisplay(e.target.value))}
+                            className="w-full h-full px-2 text-[10px] font-bold text-slate-600 bg-transparent outline-none text-center cursor-pointer" 
+                        />
+                    </td>
+                </React.Fragment>
+            ))}
+
+            <td className="border-r border-slate-100">
+                <MultilineInput 
+                    placeholder="Enter notes..."
+                    value={s.penaltyComments || ''} 
+                    onChange={val => updateField(s.id, 'penaltyComments', val)}
+                    className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-bold text-slate-500" 
+                />
+            </td>
+
+            <td className="text-center">
+                <div className="flex items-center justify-center gap-1">
+                    <button onClick={() => updateField(s.id, 'isHidden', !s.isHidden)} className={`p-1 text-slate-300 hover:text-indigo-600 transition-colors ${s.isHidden ? 'text-indigo-600' : ''}`}>
+                        {s.isHidden ? <Eye size={12} /> : <EyeOff size={12} />}
+                    </button>
+                    <button onClick={() => onDeleteStudent?.(s.id)} className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 size={12} />
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+}, (prev, next) => {
+    return prev.s === next.s && 
+           prev.idx === next.idx &&
+           prev.isFrozen === next.isFrozen &&
+           prev.studentNameWidth === next.studentNameWidth &&
+           prev.selectedIds === next.selectedIds &&
+           prev.settings?.fontSize === next.settings?.fontSize;
+});
+
 export const PenaltyTable: React.FC<PenaltyTableProps> = ({ 
   students, onUpdate, onDeleteStudent, filters, setFilters, 
   uniqueTeachers = [], 
   uniqueAssistants = [], 
   uniqueLevels = [], 
+  uniqueBehaviors = [],
   onQuickAdd, onAddStudent,
   role, onClearCategory, settings,
   category = 'Penalty',
@@ -163,14 +282,18 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
             String(s.assistant || '').toLowerCase().includes(query) ||
             String(s.teachers || '').toLowerCase().includes(query) ||
             String(s.level || '').toLowerCase().includes(query) ||
+            String(s.behavior || '').toLowerCase().includes(query) ||
+            String(s.time2 || '').toLowerCase().includes(query) ||
             String(s.time || '').toLowerCase().includes(query);
         
         const matchesTeacher = !filters.teacher || String(s.teachers || '').toUpperCase().includes(filters.teacher.toUpperCase());
         const matchesAssistant = !filters.assistant || String(s.assistant || '').toUpperCase().includes(filters.assistant.toUpperCase());
         const matchesLevel = !filters.level || String(s.level || '').toUpperCase().includes(filters.level.toUpperCase());
+        const matchesBehavior = !filters.behavior || 
+            normalizeBehavior(String(s.behavior || '')) === normalizeBehavior(filters.behavior);
         const matchesVisibility = filters.showHidden || !s.isHidden;
         
-        return matchesSearch && matchesTeacher && matchesAssistant && matchesLevel && matchesVisibility;
+        return matchesSearch && matchesTeacher && matchesAssistant && matchesLevel && matchesBehavior && matchesVisibility;
     }).sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [penaltyStudents, filters]);
 
@@ -316,6 +439,33 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
               {/* Admin Clear Button moved to top right to keep it safe but visible */}
               <div className="flex items-center gap-2">
                 <button 
+                  onClick={() => onQuickAdd({ category })}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-lg hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-2"
+                >
+                  <Plus size={16} /> AI ADD
+                </button>
+                <button 
+                  onClick={() => onAddStudent({ category })}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-xl text-xs font-black shadow-lg hover:bg-orange-600 active:scale-95 transition-all flex items-center gap-2"
+                >
+                  <Plus size={16} /> ADD MANUALLY
+                </button>
+
+                {selectedIds.size > 0 && (
+                    <button 
+                        onClick={() => {
+                            if (confirm(`Move ${selectedIds.size} records to Recycle Bin?`)) {
+                                onDeleteStudent?.(Array.from(selectedIds), true);
+                                setSelectedIds(new Set());
+                            }
+                        }}
+                        className="px-4 py-2 bg-red-500 text-white rounded-xl text-[10px] font-black shadow-lg hover:bg-red-600 transition-all flex items-center gap-2"
+                    >
+                        <Trash2 size={14} /> DELETE ({selectedIds.size})
+                    </button>
+                )}
+                
+                <button 
                     onClick={() => setFilters?.({...filters, showHidden: !filters.showHidden})}
                     className={`p-3 rounded-xl transition-all shadow-sm border ${filters.showHidden ? 'bg-[#1B254B] text-white border-[#1B254B]' : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}
                     title={filters.showHidden ? "Hide Tasks" : "Show Tasks"}
@@ -359,6 +509,13 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                       <select value={filters.assistant} onChange={e => setFilters?.({...filters, assistant: e.target.value})} className={filterSelectStyle}>
                           <option value="">Assistants</option>
                           {filterAssistants.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                  </div>
+                  <div className="relative group">
+                      <LayoutGrid size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                      <select value={filters.behavior} onChange={e => setFilters?.({...filters, behavior: e.target.value})} className={filterSelectStyle}>
+                          <option value="">Behaviors</option>
+                          {uniqueBehaviors.map(b => <option key={b} value={b}>{b}</option>)}
                       </select>
                   </div>
                   <div className="relative group">
@@ -417,107 +574,21 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredStudents.map((s, idx) => (
-                      <tr key={s.id} className={`h-8 hover:bg-white/20 transition-colors group ${getRowBg(idx)} ${s.isHidden ? 'opacity-30' : ''}`}>
-                        <td className={`border-r border-slate-100 group ${isFrozen ? 'sticky z-20 shadow-[4px_0_10px_rgba(0,0,0,0.05)] bg-white left-0' : 'bg-white/60'}`} style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}>
-                            <div className="flex items-center min-h-[32px] w-full" style={{ backgroundColor: isFrozen ? 'white' : 'transparent' }}>
-                                <MultilineInput 
-                                    value={s.name} 
-                                    onChange={val => updateField(s.id, 'name', val)} 
-                                    className="w-full bg-transparent outline-none px-3 py-1 font-black text-[#1B254B] leading-tight" 
-                                    style={{ fontSize: settings?.fontSize ? `${settings.fontSize}px` : '11px', color: '#1B254B' }}
-                                />
-                            </div>
-                        </td>
-                        <td className={`border-r border-slate-100 text-center bg-white/60`}>
-                          <div className="flex items-center justify-center min-h-[32px]">
-                             <button onClick={() => { const ns = new Set(selectedIds); ns.has(s.id) ? ns.delete(s.id) : ns.add(s.id); setSelectedIds(ns); }}>
-                                {selectedIds.has(s.id) ? <CheckSquare size={14} className="text-orange-500" /> : <Square size={14} className="text-slate-400/30" />}
-                             </button>
-                          </div>
-                        </td>
-                        <td className={`border-r border-slate-100 text-center text-[10px] font-bold text-slate-400 bg-slate-50/40`}>
-                          <div className="flex items-center justify-center min-h-[32px]">
-                            {idx + 1}
-                          </div>
-                        </td>
-                        <td className="border-r border-slate-100 bg-orange-50/60 text-center">
-                            <select 
-                              value={s.thumbprint || ''} 
-                              onChange={e => updateField(s.id, 'thumbprint', e.target.value)}
-                              className="w-full h-full px-3 text-[11px] font-black text-orange-600 bg-transparent outline-none appearance-none text-center cursor-pointer"
-                            >
-                                <option value="">-</option>
-                                {[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}</option>)}
-                            </select>
-                        </td>
-                        <td className="border-r border-slate-100">
-                            <MultilineInput value={s.behavior1 || ''} onChange={val => updateField(s.id, 'behavior1', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-medium text-slate-700 text-center" />
-                        </td>
-                        <td className="border-r border-slate-100">
-                            <MultilineInput value={s.behavior2 || ''} onChange={val => updateField(s.id, 'behavior2', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-medium text-slate-700 text-center" />
-                        </td>
-                        <td className="border-r border-slate-100">
-                            <MultilineInput value={s.behavior3 || ''} onChange={val => updateField(s.id, 'behavior3', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-medium text-slate-700 text-center" />
-                        </td>
-                        <td className="border-r border-slate-100">
-                            <MultilineInput value={s.teachers || ''} onChange={val => updateField(s.id, 'teachers', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-bold text-slate-500 uppercase" />
-                        </td>
-                        <td className="border-r border-slate-100">
-                            <MultilineInput value={s.assistant || ''} onChange={val => updateField(s.id, 'assistant', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-black text-orange-600 uppercase" />
-                        </td>
-                        <td className="border-r border-slate-100">
-                            <MultilineInput value={s.level || ''} onChange={val => updateField(s.id, 'level', val)} className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-black text-slate-600 text-center" />
-                        </td>
-
-                        {[1, 2, 3, 4, 5, 6, 7].map(num => (
-                          <React.Fragment key={num}>
-                            <td className={`border-r border-slate-100 bg-orange-50/20`}>
-                                <select 
-                                  value={s[`penaltyType${num}`] || ''} 
-                                  onChange={e => updateField(s.id, `penaltyType${num}`, e.target.value)}
-                                  className="w-full h-full px-3 text-[10px] font-black text-[#1B254B] bg-transparent outline-none appearance-none text-center"
-                                >
-                                    <option value="">-</option>
-                                    <option value="Lateness">Lateness</option>
-                                    <option value="Absence">Absence</option>
-                                    <option value="Wrong Shoes">Wrong Shoes</option>
-                                    <option value="No cards">No cards</option>
-                                    <option value="Wrong Uniforms">Wrong Uniforms</option>
-                                    <option value="Late Check (Normal)">Late Check (Normal)</option>
-                                    <option value="Other">Other</option>
-                                </select>
-                            </td>
-                            <td className="border-r border-slate-100">
-                                <input 
-                                  type="date"
-                                  value={displayToIso(s[`penaltyDate${num}`] || '')} 
-                                  onChange={e => updateField(s.id, `penaltyDate${num}`, isoToDisplay(e.target.value))}
-                                  className="w-full h-full px-2 text-[10px] font-bold text-slate-600 bg-transparent outline-none text-center cursor-pointer" 
-                                />
-                            </td>
-                          </React.Fragment>
-                        ))}
-
-                        <td className="border-r border-slate-100">
-                            <MultilineInput 
-                              placeholder="Enter notes..."
-                              value={s.penaltyComments || ''} 
-                              onChange={val => updateField(s.id, 'penaltyComments', val)}
-                              className="w-full bg-transparent outline-none px-3 py-1 text-[10px] font-bold text-slate-500" 
-                            />
-                        </td>
-
-                        <td className="text-center">
-                            <div className="flex items-center justify-center gap-1">
-                                <button onClick={() => updateField(s.id, 'isHidden', !s.isHidden)} className={`p-1 text-slate-300 hover:text-indigo-600 transition-colors ${s.isHidden ? 'text-indigo-600' : ''}`}>
-                                    {s.isHidden ? <Eye size={12} /> : <EyeOff size={12} />}
-                                </button>
-                                <button onClick={() => onDeleteStudent?.(s.id)} className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Trash2 size={12} />
-                                </button>
-                            </div>
-                        </td>
-                      </tr>
+                      <PenaltyRow
+                        key={s.id}
+                        s={s}
+                        idx={idx}
+                        studentNameWidth={studentNameWidth}
+                        isFrozen={isFrozen}
+                        settings={settings}
+                        selectedIds={selectedIds}
+                        setSelectedIds={setSelectedIds}
+                        updateField={updateField}
+                        onDeleteStudent={onDeleteStudent}
+                        getRowBg={getRowBg}
+                        displayToIso={displayToIso}
+                        isoToDisplay={isoToDisplay}
+                      />
                     ))}
                   </tbody>
               </table>

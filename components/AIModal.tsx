@@ -82,7 +82,7 @@ export const AIModal: React.FC<Props> = ({ isOpen, onClose, onAdd, defaults, mod
   if (mode === 'Attendance') {
       title = 'AI Quick Add (Attendance)';
       placeholderText = `Format:
-1- Ros Sombath (M)
+1- Sameun Borneath (M)
 2- Name (F)
 
 (Simple list of names. Sex (M)/(F) is optional.)`;
@@ -97,15 +97,16 @@ Shift: Morning
   } else if (mode === 'Hall') {
       title = 'AI Quick Add (Hall Study)';
       placeholderText = `Format:
-Name: Sok Chandara
-Teacher: Leang Pichdavina
-Level: 2A
-Behavior: Incomplete Homework
-Mon-Fri or Sat & Sunday: Mon-Fri
-Time: 5:20-6:20
+Name: Sameun Borneath
+Teacher: Pha & Vatey
+Assistant: Dalin
+Level: 5B
+Behavior: Incomplete Homework 
+Time: 1:00-1:30
+Time 2: 1:40-2:10
+Subject: Grammar 
 Duration: 1 Month
-Start: 23-Dec-2025
-Assistant: Kheang Dalin
+Start: 8 May 2026
 
 (Or paste a table screenshot with these columns)`;
   } else if (mode === 'Penalty' || mode === 'PenaltyHall') {

@@ -114,7 +114,7 @@ export const parseStudentData = async (inputText: string, imageFile?: File, mode
 
   let prompt = '';
   if (mode === 'Hall') {
-      prompt = `Extract Hall Study records: Name (name), Fee (schoolFee), Teacher (teachers), Level (level), Behavior (behavior), Schedule (schedule - e.g. Mon-Fri or Sat & Sunday), Time (time), Start Date (startDate), Assistant (assistant), Duration (duration).`;
+      prompt = `Extract Hall Study records: Name (name), Fee (schoolFee), Teacher (teachers), Level (level), Behavior (behavior), Schedule (schedule - e.g. Mon-Fri or Sat & Sunday), Time (time), Time 2 (time2), Subject (subject), Start Date (startDate), Assistant (assistant), Duration (duration).`;
   } else if (mode === 'Finance') {
       prompt = `Extract Finance records: ID (displayId), Name (name), Fee (schoolFee), Level (level), Start Date (startDate), Teachers (teachers), Monthly Payments (paymentList), Duration (duration).`;
   } else if (mode === 'DailyTask') {
@@ -122,7 +122,8 @@ export const parseStudentData = async (inputText: string, imageFile?: File, mode
   } else if (mode === 'Penalty' || mode === 'PenaltyHall') {
       prompt = `Extract Late/Absence log records: Name (name), Teachers (teachers), Assistant (assistant), Level (level), 
       Log 1 Type (penaltyType1 - e.g. Lateness, Absence, No cards, Wrong Uniforms, Other), Log 1 Date (penaltyDate1), 
-      Log 2 Type (penaltyType2), Log 2 Date (penaltyDate2).`;
+      Log 2 Type (penaltyType2), Log 2 Date (penaltyDate2),
+      Log 3 Type (penaltyType3), Log 3 Date (penaltyDate3).`;
   } else {
       prompt = `Extract Attendance list: Full Name (name). Keep Sex (M)/(F) if present.`;
   }
@@ -157,6 +158,8 @@ export const parseStudentData = async (inputText: string, imageFile?: File, mode
               teachers: { type: Type.STRING },
               startDate: { type: Type.STRING },
               time: { type: Type.STRING },
+              time2: { type: Type.STRING },
+              subject: { type: Type.STRING },
               schedule: { type: Type.STRING },
               assistant: { type: Type.STRING },
               duration: { type: Type.STRING },
@@ -165,6 +168,8 @@ export const parseStudentData = async (inputText: string, imageFile?: File, mode
               penaltyDate1: { type: Type.STRING },
               penaltyType2: { type: Type.STRING },
               penaltyDate2: { type: Type.STRING },
+              penaltyType3: { type: Type.STRING },
+              penaltyDate3: { type: Type.STRING },
               penaltyComments: { type: Type.STRING },
               paymentList: { 
                 type: Type.ARRAY,

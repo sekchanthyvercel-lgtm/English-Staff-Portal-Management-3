@@ -134,11 +134,12 @@ interface Props {
   setFilters?: (f: any) => void;
   uniqueTeachers?: string[];
   uniqueAssistants?: string[];
+  uniqueBehaviors?: string[];
 }
 
 export const Dashboard: React.FC<Props> = ({ 
   data, students, onSelectTeacher, onSelectAssistant,
-  filters, setFilters, uniqueTeachers = [], uniqueAssistants = [] 
+  filters, setFilters, uniqueTeachers = [], uniqueAssistants = [], uniqueBehaviors = [] 
 }) => {
   const activeStudents = useMemo(() => 
     students.filter(s => !s.isHidden),
@@ -255,6 +256,18 @@ export const Dashboard: React.FC<Props> = ({
                 >
                     <option value="">Assistants</option>
                     {uniqueAssistants.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+            </div>
+
+            <div className="relative">
+                <Users size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+                <select 
+                  value={filters?.behavior || ''} 
+                  onChange={e => setFilters?.({ ...filters, behavior: e.target.value })}
+                  className={filterSelectStyle}
+                >
+                    <option value="">Behaviors</option>
+                    {uniqueBehaviors.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
             </div>
             
