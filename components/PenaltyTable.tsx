@@ -313,6 +313,9 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
     });
   };
 
+  const [pageSize, setPageSize] = useState(50);
+  const [currentPage, setCurrentPage] = useState(1);
+
   const filteredStudents = useMemo(() => {
     let result = penaltyStudents.filter(s => {
         const query = filters.searchQuery?.toLowerCase() || '';
@@ -349,6 +352,12 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
   }, [penaltyStudents, filters, sortConfig]);
 
   const deferredStudents = React.useDeferredValue(filteredStudents);
+  const totalPages = Math.ceil(deferredStudents.length / pageSize);
+  const currentViewStudents = deferredStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.searchQuery, filters.teacher, filters.assistant, filters.time, filters.level]);
 
   const isoToDisplay = (iso: string) => {
       if (!iso) return '';
@@ -593,12 +602,12 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                       <tr>
                       <th 
                         onClick={() => handleSort('name')}
-                        className={`border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 z-50 cursor-pointer hover:bg-slate-50 transition-colors group ${isFrozen ? 'bg-white/95 shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white/80'}`} 
+                        className={`border-r border-white/5 text-[10px] font-black text-slate-900 text-left px-3 sticky top-0 z-50 cursor-pointer hover:bg-slate-50 transition-colors group ${isFrozen ? 'bg-white/60 backdrop-blur-md shadow-[4px_0_10px_rgba(0,0,0,0.1)] left-0' : 'bg-white/40 backdrop-blur-md'}`} 
                         style={{ width: studentNameWidth, left: isFrozen ? 0 : undefined }}
                       >
                         <div className="flex items-center justify-between">
                           STUDENT NAME
-                          <ArrowUpDown size={10} className={`${sortConfig?.key === 'name' ? 'opacity-100 text-orange-500' : 'opacity-20 group-hover:opacity-100'} transition-opacity`} />
+                          <ArrowUpDown size={12} className={`${sortConfig?.key === 'name' ? 'opacity-100 text-orange-600' : 'opacity-40 group-hover:opacity-100'} transition-opacity`} />
                         </div>
                         <div onMouseDown={onResizeStart} onTouchStart={onResizeStart} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-primary-400 opacity-0 group-hover:opacity-100 transition-opacity z-50" />
                       </th>
@@ -646,7 +655,7 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {deferredStudents.map((s, idx) => (
+                    {currentViewStudents.map((s, idx) => (
                       <PenaltyRow
                         key={s.id}
                         s={s}
@@ -665,6 +674,64 @@ export const PenaltyTable: React.FC<PenaltyTableProps> = ({
                     ))}
                   </tbody>
               </table>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="sticky bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 flex items-center justify-between z-[70] no-print px-10">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Show</span>
+                      <select 
+                        value={pageSize} 
+                        onChange={(e) => setPageSize(Number(e.target.value))}
+                        className="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none"
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                        <option value={200}>200</option>
+                      </select>
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">per page</span>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <button 
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentPage === 1 ? 'bg-slate-50 text-slate-300' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'}`}
+                      >
+                        Previous
+                      </button>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-black text-slate-900 tracking-tighter">Page</span>
+                        <input 
+                          type="number" 
+                          min={1} 
+                          max={totalPages} 
+                          value={currentPage}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (!isNaN(val) && val >= 1 && val <= totalPages) setCurrentPage(val);
+                          }}
+                          className="w-12 h-8 bg-white border border-slate-200 rounded-lg text-center text-xs font-black outline-none"
+                        />
+                        <span className="text-[11px] font-black text-slate-400 tracking-tighter">of {totalPages}</span>
+                      </div>
+
+                      <button 
+                         disabled={currentPage === totalPages}
+                         onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                         className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentPage === totalPages ? 'bg-slate-50 text-slate-300' : 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105'}`}
+                      >
+                        Next
+                      </button>
+                    </div>
+
+                    <div className="text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                      Showing {(currentPage-1)*pageSize + 1} to {Math.min(currentPage*pageSize, deferredStudents.length)} {deferredStudents.length} Students
+                    </div>
+                </div>
+              )}
           </div>
       </div>
     </div>

@@ -3,7 +3,7 @@
 
 export type StudyType = 'FullTime' | 'PartTime' | 'Khmer';
 
-export type StudentCategory = 'Hall' | 'Class' | 'Office' | 'Card' | 'Queue' | 'Penalty' | 'PenaltyHall' | 'DailyTask' | 'Reminder';
+export type StudentCategory = 'Hall' | 'Class' | 'Office' | 'Card' | 'Queue' | 'Penalty' | 'PenaltyHall' | 'Reminder';
 
 export type UserRole = 'Admin' | 'Teacher' | 'Finance';
 
@@ -102,7 +102,6 @@ export interface AppData {
   students: Student[];
   settings?: AppSettings;
   attendance: Record<string, Record<string, number>>;
-  dailyTasks?: Record<string, Record<string, string>>;
   systemLocked?: boolean;
   moduleLocks?: ModuleLocks;
   idCounters?: Record<string, number>;
@@ -122,7 +121,6 @@ export enum Tab {
   Hall2 = 'Hall2',
   Penalty = 'Penalty',
   PenaltyHall = 'PenaltyHall',
-  DailyTask = 'DailyTask',
   Reminder = 'Reminder',
   Attendance = 'Attendance',
   Finance = 'Finance',

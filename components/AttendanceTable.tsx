@@ -90,14 +90,18 @@ const getAssistantColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+
 /**
  * Icons for the Attendance Status based on screenshot: 
- * status 0 is a green solid check box.
  */
-const getStatusIcon = (status?: number) => {
+// StatusIcon is defined below
+
+// Memoized Status Icon component for better performance
+const StatusIcon = React.memo(({ status }: { status: number | undefined }) => {
   if (status === 0) return (
     <div className="w-8 h-6 bg-[#67B18E] rounded-sm flex items-center justify-center text-white shadow-sm mx-auto">
-      <Check size={16} strokeWidth={4} />
+      <Check size={14} strokeWidth={4} />
+      <span className="sr-only">P</span>
     </div>
   );
   if (status === 0.25) return (
@@ -115,18 +119,14 @@ const getStatusIcon = (status?: number) => {
        <span className="text-[10px] font-black tracking-tighter">AP</span>
     </div>
   );
-  return (
-    <div className="w-8 h-6 border-2 border-slate-200 rounded-sm mx-auto bg-white/20"></div>
+  if (status === 3) return (
+    <div className="w-8 h-6 bg-rose-900 rounded-sm flex items-center justify-center text-white shadow-sm mx-auto border border-rose-950/20">
+       <span className="text-[10px] font-black tracking-tighter">AW</span>
+    </div>
   );
-};
-
-// Memoized Status Icon component for better performance
-const StatusIcon = React.memo(({ status }: { status: number | undefined }) => {
-  if (status === 0) return <div className="w-1.5 h-1.5 bg-sky-500 rounded-full shadow-[0_0_8px_rgba(14,165,233,0.5)]" />;
-  if (status === 0.25) return <Zap size={10} className="text-amber-500 fill-amber-500" />;
-  if (status === 1) return <div className="w-1.5 h-1.5 bg-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.5)]" />;
-  if (status === 2) return <div className="w-2.5 h-2.5 border-2 border-emerald-500 rounded-sm" />;
-  return null;
+  return (
+    <div className="w-8 h-6 border border-slate-200 rounded-sm mx-auto bg-slate-50/30 group-hover:border-slate-300 transition-colors"></div>
+  );
 });
 
 const AttendanceRow = React.memo(({ 
@@ -304,6 +304,9 @@ export const AttendanceTable: React.FC<Props> = ({
     });
   };
 
+  const [pageSize, setPageSize] = useState(50);
+  const [currentPage, setCurrentPage] = useState(1);
+
   const filteredStudents = useMemo(() => {
     let result = students.filter(s => {
       const query = (filters.searchQuery || '').toLowerCase();
@@ -346,41 +349,55 @@ export const AttendanceTable: React.FC<Props> = ({
   }, [students, filters, sortConfig]);
 
   const deferredStudents = React.useDeferredValue(filteredStudents);
+  const totalPages = Math.ceil(deferredStudents.length / pageSize);
+  const currentViewStudents = deferredStudents.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.searchQuery, filters.teacher, filters.assistant, filters.time]);
 
   const cycleStatus = (studentId: string, day: number) => {
     if (isLocked) return;
     const dayKey = `${monthKey}-${String(day).padStart(2, '0')}`;
-    const newAttendance = { ...data.attendance };
-    const studentRecord = { ...(newAttendance[studentId] || {}) };
-    const cur = studentRecord[dayKey];
     
-    let next: number | undefined;
-    if (cur === undefined) next = 0; // Present
-    else if (cur === 0) next = 0.25; // Late
-    else if (cur === 0.25) next = 1; // Absent
-    else if (cur === 1) next = 2; // Absent with Permission
-    else next = undefined; // Reset
+    onUpdate((prevData: AppData) => {
+      const newAttendance = { ...prevData.attendance };
+      const studentRecord = { ...(newAttendance[studentId] || {}) };
+      const cur = studentRecord[dayKey];
+      
+      // Updated cycle: P -> A -> AP -> AW -> L -> undefined
+      let next: number | undefined;
+      if (cur === undefined) next = 0; // P
+      else if (cur === 0) next = 1;    // A
+      else if (cur === 1) next = 2;    // AP
+      else if (cur === 2) next = 3;    // AW
+      else if (cur === 3) next = 0.25; // L
+      else next = undefined;          // Reset
 
-    if (next === undefined) {
-      delete studentRecord[dayKey];
-    } else {
-      studentRecord[dayKey] = next;
-    }
-    
-    newAttendance[studentId] = studentRecord;
-    onUpdate({ ...data, attendance: newAttendance });
+      if (next === undefined) {
+        delete studentRecord[dayKey];
+      } else {
+        studentRecord[dayKey] = next;
+      }
+      
+      newAttendance[studentId] = studentRecord;
+      return { ...prevData, attendance: newAttendance };
+    });
   };
 
   const markAllPresent = () => {
     if (isLocked) return;
     const dayKey = `${monthKey}-${String(viewDate.getDate()).padStart(2, '0')}`;
-    const newAttendance = { ...data.attendance };
-    filteredStudents.forEach(s => {
-      const studentRecord = { ...(newAttendance[s.id] || {}) };
-      studentRecord[dayKey] = 0;
-      newAttendance[s.id] = studentRecord;
+    
+    onUpdate((prevData: AppData) => {
+      const newAttendance = { ...prevData.attendance };
+      filteredStudents.forEach(s => {
+        const studentRecord = { ...(newAttendance[s.id] || {}) };
+        studentRecord[dayKey] = 0;
+        newAttendance[s.id] = studentRecord;
+      });
+      return { ...prevData, attendance: newAttendance };
     });
-    onUpdate({ ...data, attendance: newAttendance });
   };
 
   const Th = ({ label, colId, width, stickyLeft }: { label: string, colId: string, width?: number, stickyLeft?: number }) => (
@@ -472,7 +489,7 @@ export const AttendanceTable: React.FC<Props> = ({
                   const row: any = { '#': i + 1, 'Student Name': s.name, 'Teacher': s.teachers || '', 'Level': s.level || '', 'Time': s.time || '', 'Assistant': s.assistant || '' };
                   dayKeys.forEach((dk, di) => {
                     const status = data.attendance[s.id]?.[dk];
-                    row[di + 1] = status === 0 ? 'P' : status === 0.25 ? 'L' : status === 1 ? 'A' : status === 2 ? 'AP' : '';
+                    row[di + 1] = status === 0 ? 'P' : status === 0.25 ? 'L' : status === 1 ? 'A' : status === 2 ? 'AP' : status === 3 ? 'AW' : '';
                   });
                   return row;
                 });
@@ -490,7 +507,7 @@ export const AttendanceTable: React.FC<Props> = ({
                     const row: any = { '#': i + 1, 'Student Name': s.name, 'Teacher': s.teachers || '', 'Assistant': s.assistant || '' };
                     dayKeys.forEach((dk, di) => {
                       const status = data.attendance[s.id]?.[dk];
-                      row[di + 1] = status === 0 ? 'P' : status === 0.25 ? 'L' : status === 1 ? 'A' : status === 2 ? 'AP' : '-';
+                      row[di + 1] = status === 0 ? 'P' : status === 0.25 ? 'L' : status === 1 ? 'A' : status === 2 ? 'AP' : status === 3 ? 'AW' : '-';
                     });
                     return row;
                   });
@@ -633,7 +650,7 @@ export const AttendanceTable: React.FC<Props> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {deferredStudents.map((s, idx) => (
+              {currentViewStudents.map((s, idx) => (
                 <AttendanceRow
                   key={s.id}
                   s={s}
@@ -657,6 +674,64 @@ export const AttendanceTable: React.FC<Props> = ({
               ))}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="sticky bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 flex items-center justify-between z-[70] no-print px-10">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Show</span>
+                  <select 
+                    value={pageSize} 
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                  </select>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">per page</span>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <button 
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentPage === 1 ? 'bg-slate-50 text-slate-300' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'}`}
+                  >
+                    Previous
+                  </button>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black text-slate-900 tracking-tighter">Page</span>
+                    <input 
+                      type="number" 
+                      min={1} 
+                      max={totalPages} 
+                      value={currentPage}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val >= 1 && val <= totalPages) setCurrentPage(val);
+                      }}
+                      className="w-12 h-8 bg-white border border-slate-200 rounded-lg text-center text-xs font-black outline-none"
+                    />
+                    <span className="text-[11px] font-black text-slate-400 tracking-tighter">of {totalPages}</span>
+                  </div>
+
+                  <button 
+                     disabled={currentPage === totalPages}
+                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentPage === totalPages ? 'bg-slate-50 text-slate-300' : 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:scale-105'}`}
+                  >
+                    Next
+                  </button>
+                </div>
+
+                <div className="text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                  Showing {(currentPage-1)*pageSize + 1} to {Math.min(currentPage*pageSize, deferredStudents.length)} {deferredStudents.length} Students
+                </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

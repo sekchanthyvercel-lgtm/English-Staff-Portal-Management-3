@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { StudentTable } from './components/StudentTable';
 import { PenaltyTable } from './components/PenaltyTable';
-import { DailyTaskTable } from './components/DailyTaskTable';
 import { LandingPage } from './components/LandingPage';
 import { AIModal } from './components/AIModal';
 import { AttendanceTable } from './components/AttendanceTable';
@@ -91,69 +90,6 @@ const App: React.FC = () => {
     }, 300);
     return () => clearTimeout(timer);
   }, [filters]);
-
-  const OFFICIAL_DAILY_TASKS = useMemo(() => [
-    { name: "Souyean & Sreythea", level: "1A + (5.1)", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Sreythea & Vilya", level: "1A + (5.1)", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Chhenglay & Nita", level: "1B-(16.10)", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Chhenglay & Derith", level: "1B-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Meymey & Naza", level: "1B- (1.9)", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Naza & Pulvatey", level: "1B-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Mengthou & Meymey", level: "Pre-2A(I)-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Chanpanha & Sonita", level: "Pre-2A(I)-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Derith & Mengthou", level: "Pre-2A(I)+", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Lina & Davina", level: "Pre-2A(I)+", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Pha & Saravottey", level: "Pre-2A(II)-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Virak & Chhenglay", level: "Pre-2A(II)-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Sreypov & Chhorvornn", level: "2A-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Pha & Liza", level: "2A-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Sreyleap & Chhengly", level: "2B-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Chhorvornn & Sreyren", level: "2B-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "S.Vottey & Soklim", level: "2B+", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Davina & Virak", level: "2B+", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Piseth & Kimheang", level: "3A-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Nita & Thida", level: "3A-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Sathyaboth & Thida", level: "3A-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Chhengly & Pisey", level: "3A+", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Chhengly & Naza", level: "3A+", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Souyean & Soklim", level: "3B +", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Soklim & Chanpanha", level: "3B +", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Lina & Bormey", level: "4A-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Sreyren & Both", level: "4A-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Pisey & Chhenglay", level: "4A+", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Sonita & Chhorvornn", level: "4A+", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Virak & Socheata", level: "4A+", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Derith & Socheata", level: "4A+", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Bormey & Chomnan", level: "4B+", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Socheata & Dalin", level: "4B+", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Seavninh & Derith", level: "5A-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Dalin & Piseth", level: "5A-", shift: "Afternoon", category: "DailyTask" as StudentCategory },
-    { name: "Thida & Sreypov", level: "5B-", shift: "Morning", category: "DailyTask" as StudentCategory },
-    { name: "Pulvatey & Pha", level: "5B-", shift: "Afternoon", category: "DailyTask" as StudentCategory }
-  ], []);
-
-  // One-time seed for Daily Tasks
-  useEffect(() => {
-    if (!loading) {
-        const hasTasks = data.students.some(s => s.category === 'DailyTask');
-        if (!hasTasks) {
-            const newTasks: Student[] = OFFICIAL_DAILY_TASKS.map(t => ({
-                ...t,
-                id: uuidv4(),
-                teachers: '',
-                behavior: '',
-                time: '',
-                duration: '',
-                startDate: '',
-                deadline: format(new Date(), 'dd/MM/yy'),
-                assistant: '',
-                order: 0,
-                isHidden: false
-            }));
-            handleUpdate({ ...data, students: [...data.students, ...newTasks] });
-        }
-    }
-  }, [loading, data.students.length === 0]);
 
   const allActiveStudents = useMemo(() => data.students.filter(s => !s.deletedAt), [data.students]);
 
@@ -558,7 +494,6 @@ const App: React.FC = () => {
         mode={
             activeTab === Tab.Attendance ? 'Attendance' : 
             activeTab === Tab.Finance ? 'Finance' : 
-            activeTab === Tab.DailyTask ? 'DailyTask' : 
             activeTab === Tab.Penalty ? 'Penalty' :
             activeTab === Tab.PenaltyHall ? 'PenaltyHall' : 'Hall'
         } 
@@ -574,7 +509,7 @@ const App: React.FC = () => {
       <SupermanAnimation students={data.students} />
 
       <main 
-        className="flex-1 flex flex-col overflow-hidden transition-transform duration-300 origin-top-left bg-transparent pt-4 sm:pt-0"
+        className="flex-1 flex flex-col overflow-hidden transition-transform duration-300 origin-top-left bg-transparent pt-8 sm:pt-0"
         style={{ transform: `scale(${globalScale})`, width: `${100/globalScale}%`, height: `${100/globalScale}%` }}
       >
         {loading ? (
@@ -645,26 +580,6 @@ const App: React.FC = () => {
                 settings={data.settings}
                 category="PenaltyHall"
                 title="Late/absence Hall Study"
-              />
-            )}
-            {activeTab === Tab.DailyTask && (
-              <DailyTaskTable 
-                students={allActiveStudents} 
-                data={data}
-                onUpdate={handleUpdate} 
-                onDeleteStudent={handleDeleteStudent}
-                filters={debouncedFilters} 
-                setFilters={setFilters}
-                actualSearchQuery={filters.searchQuery}
-                uniqueTeachers={uniqueTeachers}
-                uniqueAssistants={uniqueAssistants}
-                uniqueLevels={uniqueLevels}
-                uniqueTimes={uniqueTimes}
-                uniqueBehaviors={uniqueBehaviors}
-                onAddStudent={(defaults) => handleAddStudent(defaults)} 
-                role={currentUser.role}
-                onClearCategory={handleClearCategory}
-                settings={data.settings}
               />
             )}
             {activeTab === Tab.Reminder && (
