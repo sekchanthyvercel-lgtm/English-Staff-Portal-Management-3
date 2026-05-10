@@ -277,6 +277,19 @@ const App: React.FC = () => {
           newData.settings.columns = newCols;
         }
 
+        // Migration: Ensure 'time2' column exists if missing
+        const hasTime2 = newData.settings.columns.some((c: any) => c.key === 'time2');
+        if (!hasTime2) {
+          const newCols = [...newData.settings.columns];
+          const timeIdx = newCols.findIndex((c: any) => c.key === 'time');
+          if (timeIdx !== -1) {
+            newCols.splice(timeIdx + 1, 0, DEFAULT_COLUMNS.find(c => c.key === 'time2')!);
+          } else {
+            newCols.push(DEFAULT_COLUMNS.find(c => c.key === 'time2')!);
+          }
+          newData.settings.columns = newCols;
+        }
+
         // Migration: Reorder 'assistant' between 'teachers' and 'level' if it is at the end
         const assistantIdx = newData.settings.columns.findIndex((c: any) => c.key === 'assistant');
         const teachersIdx = newData.settings.columns.findIndex((c: any) => c.key === 'teachers');

@@ -114,7 +114,8 @@ export const parseStudentData = async (inputText: string, imageFile?: File, mode
 
   let prompt = '';
   if (mode === 'Hall') {
-      prompt = `Extract Hall Study records: Name (name), Fee (schoolFee), Teacher (teachers), Level (level), Behavior (behavior), Schedule (schedule - e.g. Mon-Fri or Sat & Sunday), Time (time), Time 2 (time2), Subject (subject), Start Date (startDate), Assistant (assistant), Duration (duration).`;
+      prompt = `Extract Hall Study records: Name (name), Fee (schoolFee), Teacher (teachers), Level (level), Behavior (behavior), Schedule (schedule - e.g. Mon-Fri or Sat & Sunday), Time (time), Time 2 (time2), Subject (subject), Start Date (startDate), Assistant (assistant), Duration (duration). 
+      IMPORTANT: "Time 2" is often listed separately or below the main Time. Make sure to capture BOTH if they exist.`;
   } else if (mode === 'Finance') {
       prompt = `Extract Finance records: ID (displayId), Name (name), Fee (schoolFee), Level (level), Start Date (startDate), Teachers (teachers), Monthly Payments (paymentList), Duration (duration).`;
   } else if (mode === 'DailyTask') {
@@ -125,10 +126,15 @@ export const parseStudentData = async (inputText: string, imageFile?: File, mode
       Log 2 Type (penaltyType2), Log 2 Date (penaltyDate2),
       Log 3 Type (penaltyType3), Log 3 Date (penaltyDate3).`;
   } else {
-      prompt = `Extract Attendance list: Full Name (name). Keep Sex (M)/(F) if present.`;
+      prompt = `Extract Attendance list: Full Name (name). Keep Sex (M)/(F) if present. Identify gender if possible even if not listed explicitly.`;
   }
   
-  prompt += `\nCRITICAL: Return startDate in format dd/MM/yyyy (e.g., 24/12/2025). Ensure year is ALWAYS 4 digits. JSON array format.`;
+  prompt += `\nCRITICAL: 
+  1. DO NOT SKIP ANY STUDENTS. 
+  2. Capture every field precisely. 
+  3. Return startDate in format dd/MM/yyyy (e.g., 24/12/2025). Ensure year is ALWAYS 4 digits. 
+  4. Response must be a JSON array of objects.
+  5. If an image is provided, perform high-accuracy OCR to extract every single row.`;
 
   const availableKeys = getGeminiKeys();
   if (availableKeys.length === 0) {
